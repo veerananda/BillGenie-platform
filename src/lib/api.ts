@@ -1,5 +1,15 @@
-export const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || 'https://billgenie-api.fly.dev';
+const BACKEND_API_BASE_URL =
+  process.env.PLATFORM_API_BASE_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  'https://billgenie-api.fly.dev';
+
+/** Browser uses same-origin proxy to avoid CORS; server could call backend directly. */
+function platformApiRoot(): string {
+  if (typeof window !== 'undefined') {
+    return '/api/platform';
+  }
+  return `${BACKEND_API_BASE_URL}/platform`;
+}
 
 export interface PlatformRestaurantSummary {
   id: string;
@@ -66,7 +76,10 @@ function platformHeaders(): HeadersInit {
 }
 
 async function platformFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const normalizedPath = path.startsWith('/platform/')
+    ? path.slice('/platform'.length)
+    : path;
+  const res = await fetch(`${platformApiRoot()}${normalizedPath}`, {
     ...init,
     headers: {
       ...platformHeaders(),
