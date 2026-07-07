@@ -161,6 +161,16 @@ export async function setRestaurantActive(
   );
 }
 
+export async function deleteRestaurant(
+  id: string,
+  body: { reason: string; confirm_name: string }
+) {
+  return platformFetch<{ message: string }>(`/platform/restaurants/${id}`, {
+    method: 'DELETE',
+    body: JSON.stringify(body),
+  });
+}
+
 export function isLoggedIn(): boolean {
   if (typeof window === 'undefined') return false;
   return Boolean(sessionStorage.getItem('platform_api_key'));

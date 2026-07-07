@@ -62,3 +62,8 @@ export async function PUT(req: NextRequest, context: RouteContext) {
   const { path } = await context.params;
   return proxyRequest(req, path);
 }
+
+export async function DELETE(req: NextRequest, context: RouteContext) {
+  const { path } = await context.params;
+  return proxyRequest(req, path);
+}
