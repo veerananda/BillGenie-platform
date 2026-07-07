@@ -7,6 +7,7 @@ import { PlatformShell, PhaseBadge, formatDate } from '@/components/PlatformShel
 import {
   PlatformRestaurantDetail,
   SubscriptionSelection,
+  deleteRestaurant,
   extendTrial,
   getRestaurant,
   grantSubscription,
@@ -29,6 +30,8 @@ export default function RestaurantDetailPage() {
   const [trialDays, setTrialDays] = useState('15');
   const [selection, setSelection] = useState<SubscriptionSelection | null>(null);
   const [busy, setBusy] = useState('');
+  const [confirmName, setConfirmName] = useState('');
+  const [deleteReason, setDeleteReason] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -67,6 +70,42 @@ export default function RestaurantDetailPage() {
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Action failed');
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!detail) return;
+    if (!deleteReason.trim()) {
+      setError('Please enter a reason for deletion');
+      return;
+    }
+    if (confirmName.trim().toLowerCase() !== detail.name.trim().toLowerCase()) {
+      setError('Confirmation name must match the restaurant name exactly');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Permanently delete "${detail.name}" and ALL its data? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setBusy('delete');
+    setError('');
+    setMessage('');
+    try {
+      const res = await deleteRestaurant(id, {
+        reason: deleteReason.trim(),
+        confirm_name: confirmName.trim(),
+      });
+      router.replace('/restaurants');
+      router.refresh();
+      setMessage(res.message || 'Restaurant deleted');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed');
     } finally {
       setBusy('');
     }
@@ -285,6 +324,41 @@ export default function RestaurantDetailPage() {
             busy={false}
             hideButton
           />
+        </ActionCard>
+      </section>
+
+      <section className="mt-6">
+        <ActionCard title="Danger zone">
+          <p className="mt-2 text-sm text-red-300">
+            Permanently deletes this restaurant, all staff accounts, orders, menu, inventory,
+            tables, and audit history. This cannot be undone.
+          </p>
+          <label className="mt-4 block text-sm text-slate-300">
+            Type restaurant name to confirm: <span className="text-white">{detail.name}</span>
+            <input
+              value={confirmName}
+              onChange={(e) => setConfirmName(e.target.value)}
+              className="mt-1 w-full rounded border border-red-900 bg-slate-950 px-2 py-1.5 text-white"
+              placeholder={detail.name}
+            />
+          </label>
+          <label className="mt-3 block text-sm text-slate-300">
+            Reason (required)
+            <input
+              value={deleteReason}
+              onChange={(e) => setDeleteReason(e.target.value)}
+              className="mt-1 w-full rounded border border-red-900 bg-slate-950 px-2 py-1.5 text-white"
+              placeholder="e.g. Test tenant cleanup"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={!!busy}
+            onClick={handleDelete}
+            className="mt-4 rounded-lg border border-red-700 bg-red-950 px-4 py-2 text-sm font-medium text-red-200 hover:bg-red-900 disabled:opacity-50"
+          >
+            {busy === 'delete' ? 'Deleting…' : 'Delete restaurant permanently'}
+          </button>
         </ActionCard>
       </section>
 
