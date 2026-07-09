@@ -15,6 +15,7 @@ import {
   setRestaurantActive,
   updateSelection,
 } from '@/lib/api';
+import { BulkImportPanel } from '@/components/BulkImportPanel';
 
 export default function RestaurantDetailPage() {
   const params = useParams();
@@ -230,6 +231,8 @@ export default function RestaurantDetailPage() {
           busy={busy === 'selection'}
         />
       </section>
+
+      <BulkImportPanel restaurantId={id} />
 
       <section className="mt-6 grid gap-4 md:grid-cols-2">
         <ActionCard title="Grant subscription (no payment)">

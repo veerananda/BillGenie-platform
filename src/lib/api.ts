@@ -171,6 +171,63 @@ export async function deleteRestaurant(
   });
 }
 
+export interface BulkMenuUploadRow {
+  category: string;
+  type: string;
+  price: number;
+  is_veg: boolean;
+  is_available: boolean;
+  is_readily_available: boolean;
+}
+
+export interface BulkRecipeUploadRow {
+  category: string;
+  type: string;
+  ingredient_name: string;
+  unit: string;
+  quantity: number;
+}
+
+export interface BulkRowError {
+  row: number;
+  field?: string;
+  message: string;
+}
+
+export interface BulkMenuResult {
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: BulkRowError[];
+}
+
+export interface BulkRecipesResult {
+  menus_updated: number;
+  ingredients_created: number;
+  recipe_lines_created: number;
+  errors: BulkRowError[];
+}
+
+export async function bulkUploadMenu(
+  id: string,
+  body: { reason: string; items: BulkMenuUploadRow[] }
+) {
+  return platformFetch<{ message: string; result: BulkMenuResult }>(
+    `/platform/restaurants/${id}/menu/bulk`,
+    { method: 'POST', body: JSON.stringify(body) }
+  );
+}
+
+export async function bulkUploadRecipes(
+  id: string,
+  body: { reason: string; items: BulkRecipeUploadRow[] }
+) {
+  return platformFetch<{ message: string; result: BulkRecipesResult }>(
+    `/platform/restaurants/${id}/recipes/bulk`,
+    { method: 'POST', body: JSON.stringify(body) }
+  );
+}
+
 export function isLoggedIn(): boolean {
   if (typeof window === 'undefined') return false;
   return Boolean(sessionStorage.getItem('platform_api_key'));
