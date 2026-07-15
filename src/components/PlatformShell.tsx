@@ -22,16 +22,28 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
               BillGenie Platform
             </Link>
             <nav className="text-sm text-slate-400">
-              <Link
-                href="/restaurants"
-                className={
-                  pathname?.startsWith('/restaurants')
-                    ? 'text-white'
-                    : 'hover:text-white'
-                }
-              >
-                Restaurants
-              </Link>
+              <div className="flex items-center gap-4">
+                <Link
+                  href="/restaurants"
+                  className={
+                    pathname?.startsWith('/restaurants')
+                      ? 'text-white'
+                      : 'hover:text-white'
+                  }
+                >
+                  Restaurants
+                </Link>
+                <Link
+                  href="/support-issues"
+                  className={
+                    pathname?.startsWith('/support-issues')
+                      ? 'text-white'
+                      : 'hover:text-white'
+                  }
+                >
+                  Support Issues
+                </Link>
+              </div>
             </nav>
           </div>
           <button
