@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PlatformShell, formatDate } from '@/components/PlatformShell';
 import {
@@ -32,6 +32,10 @@ function statusLabel(status: SupportIssueStatus) {
     : status.charAt(0).toUpperCase() + status.slice(1);
 }
 
+function normalizeResolution(value?: string) {
+  return (value || '').trim();
+}
+
 export default function SupportIssuesPage() {
   const router = useRouter();
   const [items, setItems] = useState<PlatformSupportIssue[]>([]);
@@ -45,11 +49,15 @@ export default function SupportIssuesPage() {
   const [draftStatus, setDraftStatus] = useState<Record<string, SupportIssueStatus>>({});
   const [draftResolution, setDraftResolution] = useState<Record<string, string>>({});
 
-  const load = async () => {
+  const load = useCallback(async (next?: { search?: string; status?: SupportIssueStatus | '' }) => {
     setLoading(true);
     setError('');
     try {
-      const data = await listSupportIssues({ search, status, limit: 100 });
+      const data = await listSupportIssues({
+        search: next?.search ?? search,
+        status: next?.status ?? status,
+        limit: 100,
+      });
       setItems(data.issues || []);
       setTotal(data.total || 0);
       const nextStatus: Record<string, SupportIssueStatus> = {};
@@ -65,32 +73,59 @@ export default function SupportIssuesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, status]);
 
   useEffect(() => {
     if (!isLoggedIn()) {
       router.replace('/login');
       return;
     }
-    load();
   }, [router]);
 
+  useEffect(() => {
+    if (!isLoggedIn()) return;
+
+    const handle = window.setTimeout(() => {
+      load();
+    }, 250);
+
+    return () => window.clearTimeout(handle);
+  }, [load]);
+
   const saveIssue = async (issue: PlatformSupportIssue) => {
+    const nextStatus = draftStatus[issue.id] || issue.status;
+    const nextResolution = normalizeResolution(draftResolution[issue.id]);
+    if (
+      nextStatus === issue.status &&
+      nextResolution === normalizeResolution(issue.resolution_note)
+    ) {
+      return;
+    }
+
     setBusyId(issue.id);
     setError('');
     setMessage('');
     try {
       const result = await updateSupportIssue(issue.id, {
-        status: draftStatus[issue.id] || issue.status,
-        resolution_note: draftResolution[issue.id] || '',
+        status: nextStatus,
+        resolution_note: nextResolution,
       });
       setItems((prev) => prev.map((item) => (item.id === issue.id ? result.issue : item)));
+      setDraftStatus((prev) => ({ ...prev, [issue.id]: result.issue.status }));
+      setDraftResolution((prev) => ({ ...prev, [issue.id]: result.issue.resolution_note || '' }));
       setMessage(result.message || 'Support issue updated');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Update failed');
     } finally {
       setBusyId('');
     }
+  };
+
+  const hasIssueChanges = (issue: PlatformSupportIssue) => {
+    return (
+      (draftStatus[issue.id] || issue.status) !== issue.status ||
+      normalizeResolution(draftResolution[issue.id]) !== normalizeResolution(issue.resolution_note)
+    );
   };
 
   return (
@@ -118,13 +153,6 @@ export default function SupportIssuesPage() {
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            onClick={load}
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
-          >
-            Search
-          </button>
         </div>
       </div>
 
@@ -133,8 +161,11 @@ export default function SupportIssuesPage() {
       {loading ? <p className="text-slate-400">Loading…</p> : null}
 
       <div className="space-y-4">
-        {items.map((issue) => (
-          <article key={issue.id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
+        {items.map((issue) => {
+          const hasChanges = hasIssueChanges(issue);
+
+          return (
+            <article key={issue.id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -211,15 +242,16 @@ export default function SupportIssuesPage() {
               </label>
               <button
                 type="button"
-                disabled={busyId === issue.id}
+                disabled={busyId === issue.id || !hasChanges}
                 onClick={() => saveIssue(issue)}
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-60"
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {busyId === issue.id ? 'Saving…' : 'Save'}
+                {busyId === issue.id ? 'Saving…' : hasChanges ? 'Save' : 'Saved'}
               </button>
             </div>
           </article>
-        ))}
+          );
+        })}
       </div>
 
       {!loading && items.length === 0 ? (
