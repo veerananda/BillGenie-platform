@@ -62,6 +62,30 @@ export interface PlatformRestaurantDetail extends PlatformRestaurantSummary {
   }>;
 }
 
+export type SupportIssueStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+
+export interface PlatformSupportIssue {
+  id: string;
+  restaurant_id: string;
+  restaurant_name?: string;
+  restaurant_code?: string;
+  user_id?: string;
+  reporter_name?: string;
+  reporter_role?: string;
+  category: 'query' | 'problem' | 'other';
+  title: string;
+  description: string;
+  screenshot_data_url?: string;
+  screenshot_name?: string;
+  screenshot_content_type?: string;
+  status: SupportIssueStatus;
+  resolution_note?: string;
+  resolved_by?: string;
+  resolved_at?: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
 function platformHeaders(): HeadersInit {
   if (typeof window === 'undefined') {
     return { 'Content-Type': 'application/json' };
@@ -113,6 +137,33 @@ export async function listRestaurants(params: {
 export async function getRestaurant(id: string) {
   return platformFetch<{ restaurant: PlatformRestaurantDetail }>(
     `/platform/restaurants/${id}`
+  );
+}
+
+export async function listSupportIssues(params: {
+  search?: string;
+  status?: SupportIssueStatus | '';
+  limit?: number;
+  offset?: number;
+}) {
+  const q = new URLSearchParams();
+  if (params.search) q.set('search', params.search);
+  if (params.status) q.set('status', params.status);
+  if (params.limit) q.set('limit', String(params.limit));
+  if (params.offset) q.set('offset', String(params.offset));
+  return platformFetch<{
+    issues: PlatformSupportIssue[];
+    total: number;
+  }>(`/platform/support-issues?${q.toString()}`);
+}
+
+export async function updateSupportIssue(
+  id: string,
+  body: { status: SupportIssueStatus; resolution_note?: string }
+) {
+  return platformFetch<{ message: string; issue: PlatformSupportIssue }>(
+    `/platform/support-issues/${id}`,
+    { method: 'PUT', body: JSON.stringify(body) }
   );
 }
 
