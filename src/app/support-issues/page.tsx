@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PlatformShell, formatDate } from '@/components/PlatformShell';
+import { SupportScreenshotGallery } from '@/components/SupportScreenshotGallery';
 import {
   PlatformSupportIssue,
   SupportIssueStatus,
@@ -11,6 +12,8 @@ import {
   listSupportIssues,
   updateSupportIssue,
 } from '@/lib/api';
+
+import { getSupportIssueScreenshots, type SupportIssueScreenshot } from '@/lib/api';
 
 const STATUS_OPTIONS: Array<{ value: SupportIssueStatus | ''; label: string }> = [
   { value: '', label: 'All statuses' },
@@ -36,6 +39,20 @@ function normalizeResolution(value?: string) {
   return (value || '').trim();
 }
 
+function getIssueScreenshots(issue: PlatformSupportIssue) {
+  if (issue.screenshots?.length) return issue.screenshots;
+  if (issue.screenshot_data_url) {
+    return [
+      {
+        data_url: issue.screenshot_data_url,
+        name: issue.screenshot_name || 'screenshot',
+        content_type: issue.screenshot_content_type || 'image/jpeg',
+      },
+    ];
+  }
+  return [];
+}
+
 export default function SupportIssuesPage() {
   const router = useRouter();
   const [items, setItems] = useState<PlatformSupportIssue[]>([]);
@@ -48,6 +65,11 @@ export default function SupportIssuesPage() {
   const [busyId, setBusyId] = useState('');
   const [draftStatus, setDraftStatus] = useState<Record<string, SupportIssueStatus>>({});
   const [draftResolution, setDraftResolution] = useState<Record<string, string>>({});
+
+  const [previewScreenshots, setPreviewScreenshots] = useState<SupportIssueScreenshot[]>([]);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewIssueId, setPreviewIssueId] = useState<string | null>(null);
 
   const load = useCallback(async (next?: { search?: string; status?: SupportIssueStatus | '' }) => {
     setLoading(true);
@@ -74,6 +96,22 @@ export default function SupportIssuesPage() {
       setLoading(false);
     }
   }, [search, status]);
+
+  const openIssueScreenshots = async (issueId: string) => {
+    setError('');
+    setMessage('');
+    setPreviewLoading(true);
+    try {
+      const res = await getSupportIssueScreenshots(issueId);
+      setPreviewScreenshots(res?.screenshots ?? []);
+      setPreviewIndex(0);
+      setPreviewIssueId(issueId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load screenshots');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -163,6 +201,11 @@ export default function SupportIssuesPage() {
       <div className="space-y-4">
         {items.map((issue) => {
           const hasChanges = hasIssueChanges(issue);
+          const issueScreenshots = getIssueScreenshots(issue);
+          const screenshotCount =
+            typeof issue.screenshot_count === 'number'
+              ? issue.screenshot_count
+              : issueScreenshots.length;
 
           return (
             <article key={issue.id} className="rounded-xl border border-slate-800 bg-slate-900/50 p-5">
@@ -194,16 +237,24 @@ export default function SupportIssuesPage() {
               {issue.description}
             </p>
 
-            {issue.screenshot_data_url ? (
-              <div className="mt-4">
-                <a
-                  href={issue.screenshot_data_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800"
+            {issueScreenshots.length > 0 ? (
+              <SupportScreenshotGallery screenshots={issueScreenshots} />
+            ) : screenshotCount > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => openIssueScreenshots(issue.id)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/40 px-3 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+                  disabled={previewLoading}
                 >
-                  Open screenshot{issue.screenshot_name ? `: ${issue.screenshot_name}` : ''}
-                </a>
+                  View screenshots{screenshotCount > 1 ? ` (${screenshotCount})` : ''}
+                </button>
+              </div>
+            ) : null}
+
+            {previewIssueId === issue.id && previewScreenshots.length > 0 ? (
+              <div className="mt-4">
+                <SupportScreenshotGallery screenshots={previewScreenshots} />
               </div>
             ) : null}
 

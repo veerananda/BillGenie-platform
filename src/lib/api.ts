@@ -64,6 +64,12 @@ export interface PlatformRestaurantDetail extends PlatformRestaurantSummary {
 
 export type SupportIssueStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
 
+export interface SupportIssueScreenshot {
+  data_url: string;
+  name: string;
+  content_type: string;
+}
+
 export interface PlatformSupportIssue {
   id: string;
   restaurant_id: string;
@@ -75,9 +81,11 @@ export interface PlatformSupportIssue {
   category: 'query' | 'problem' | 'other';
   title: string;
   description: string;
+  screenshot_count?: number;
   screenshot_data_url?: string;
   screenshot_name?: string;
   screenshot_content_type?: string;
+  screenshots?: SupportIssueScreenshot[];
   status: SupportIssueStatus;
   resolution_note?: string;
   resolved_by?: string;
@@ -155,6 +163,14 @@ export async function listSupportIssues(params: {
     issues: PlatformSupportIssue[];
     total: number;
   }>(`/platform/support-issues?${q.toString()}`);
+}
+
+export async function getSupportIssueScreenshots(issueId: string): Promise<{
+  screenshots: SupportIssueScreenshot[];
+}> {
+  return platformFetch<{ screenshots: SupportIssueScreenshot[] }>(
+    `/platform/support-issues/${issueId}/screenshots`
+  );
 }
 
 export async function updateSupportIssue(
