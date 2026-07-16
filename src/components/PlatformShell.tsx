@@ -84,6 +84,15 @@ export function PhaseBadge({
   );
 }
 
+export function BoolBadge({ value, trueLabel, falseLabel }: { value: boolean; trueLabel: string; falseLabel: string }) {
+  const cls = value ? 'bg-emerald-900/50 text-emerald-200' : 'bg-slate-800 text-slate-300';
+  return (
+    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${cls}`}>
+      {value ? trueLabel : falseLabel}
+    </span>
+  );
+}
+
 export function formatDate(value: string) {
   if (!value) return '—';
   return new Date(value).toLocaleDateString('en-IN', {
