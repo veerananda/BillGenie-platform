@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { PlatformShell, PhaseBadge, formatDate } from '@/components/PlatformShell';
+import { PlatformShell, PhaseBadge, BoolBadge, formatDate } from '@/components/PlatformShell';
 import {
   PlatformRestaurantSummary,
   isLoggedIn,
@@ -85,6 +85,8 @@ export default function RestaurantsPage() {
               <th className="px-4 py-3 font-medium">Restaurant</th>
               <th className="px-4 py-3 font-medium">Plan</th>
               <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">Email verified</th>
+              <th className="px-4 py-3 font-medium">Approved</th>
               <th className="px-4 py-3 font-medium">Ends</th>
               <th className="px-4 py-3 font-medium">Price</th>
             </tr>
@@ -106,6 +108,12 @@ export default function RestaurantsPage() {
                 <td className="px-4 py-3 capitalize">{r.subscription_plan}</td>
                 <td className="px-4 py-3">
                   <PhaseBadge phase={r.subscription_phase} blocked={r.is_access_blocked} />
+                </td>
+                <td className="px-4 py-3">
+                  <BoolBadge value={r.is_email_verified} trueLabel="verified" falseLabel="unverified" />
+                </td>
+                <td className="px-4 py-3">
+                  <BoolBadge value={r.is_approved} trueLabel="approved" falseLabel="pending" />
                 </td>
                 <td className="px-4 py-3">
                   {formatDate(r.subscription_end)}

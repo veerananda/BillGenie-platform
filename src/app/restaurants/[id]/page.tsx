@@ -3,10 +3,11 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { PlatformShell, PhaseBadge, formatDate } from '@/components/PlatformShell';
+import { PlatformShell, PhaseBadge, BoolBadge, formatDate } from '@/components/PlatformShell';
 import {
   PlatformRestaurantDetail,
   SubscriptionSelection,
+  approveRestaurant,
   deleteRestaurant,
   extendTrial,
   getRestaurant,
@@ -162,6 +163,14 @@ export default function RestaurantDetailPage() {
         <InfoCard label="Tables" value={`${detail.usage.tables ?? 0} / ${detail.limits.max_tables ?? '—'}`} />
         <InfoCard label="Staff" value={String(detail.usage.staff_and_chefs ?? detail.staff_count)} />
         <InfoCard label="Admin login" value={detail.admin_login_hint || '—'} />
+        <div className="rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Email verified</div>
+          <div className="mt-1"><BoolBadge value={detail.is_email_verified} trueLabel="verified" falseLabel="unverified" /></div>
+        </div>
+        <div className="rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3">
+          <div className="text-xs uppercase tracking-wide text-slate-500">Approved</div>
+          <div className="mt-1"><BoolBadge value={detail.is_approved} trueLabel="approved" falseLabel="pending" /></div>
+        </div>
       </div>
 
       <section className="mt-8 rounded-xl border border-slate-800 bg-slate-900/50 p-5">
@@ -296,6 +305,16 @@ export default function RestaurantDetailPage() {
           <div className="mt-2 flex flex-wrap gap-2">
             <button
               type="button"
+              disabled={!!busy || !detail.is_email_verified || detail.is_approved}
+              onClick={() =>
+                runAction('approve', () => approveRestaurant(id, { reason: reason.trim() }))
+              }
+              className="rounded-lg border border-emerald-800 px-4 py-2 text-sm text-emerald-300 hover:bg-emerald-950 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {busy === 'approve' ? 'Approving…' : 'Approve this restaurant'}
+            </button>
+            <button
+              type="button"
               disabled={!!busy}
               onClick={() =>
                 runAction('suspend', () =>
@@ -319,6 +338,13 @@ export default function RestaurantDetailPage() {
               Reactivate
             </button>
           </div>
+          {!detail.is_email_verified ? (
+            <p className="mt-2 text-xs text-slate-500">
+              Email must be verified before you can approve this restaurant.
+            </p>
+          ) : detail.is_approved ? (
+            <p className="mt-2 text-xs text-slate-500">Already approved.</p>
+          ) : null}
           <ActionRow
             reason={reason}
             onReason={setReason}

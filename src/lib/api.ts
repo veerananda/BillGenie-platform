@@ -25,6 +25,8 @@ export interface PlatformRestaurantSummary {
   days_remaining: number;
   is_active: boolean;
   is_access_blocked: boolean;
+  is_email_verified: boolean;
+  is_approved: boolean;
   monthly_price: number;
   admin_count: number;
   staff_count: number;
@@ -209,6 +211,13 @@ export async function setRestaurantActive(
   return platformFetch<{ message: string }>(
     `/platform/restaurants/${id}/active`,
     { method: 'PUT', body: JSON.stringify(body) }
+  );
+}
+
+export async function approveRestaurant(id: string, body: { reason: string }) {
+  return platformFetch<{ message: string }>(
+    `/platform/restaurants/${id}/approve`,
+    { method: 'POST', body: JSON.stringify(body) }
   );
 }
 
