@@ -77,6 +77,24 @@ export default function RestaurantDetailPage() {
     }
   };
 
+  const handleApprove = async () => {
+    setBusy('approve');
+    setError('');
+    setMessage('');
+    try {
+      const res = await approveRestaurant(id, {
+        reason: reason.trim() || 'Approved via BillGenie portal',
+      });
+      setMessage(res.message || 'Restaurant approved');
+      setReason('');
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Approval failed');
+    } finally {
+      setBusy('');
+    }
+  };
+
   const handleDelete = async () => {
     if (!detail) return;
     if (!deleteReason.trim()) {
@@ -306,9 +324,7 @@ export default function RestaurantDetailPage() {
             <button
               type="button"
               disabled={!!busy || !detail.is_email_verified || detail.is_approved}
-              onClick={() =>
-                runAction('approve', () => approveRestaurant(id, { reason: reason.trim() }))
-              }
+              onClick={handleApprove}
               className="rounded-lg border border-emerald-800 px-4 py-2 text-sm text-emerald-300 hover:bg-emerald-950 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {busy === 'approve' ? 'Approving…' : 'Approve this restaurant'}

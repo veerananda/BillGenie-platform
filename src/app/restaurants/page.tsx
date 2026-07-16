@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { PlatformShell, PhaseBadge, BoolBadge, formatDate } from '@/components/PlatformShell';
 import {
   PlatformRestaurantSummary,
+  approveRestaurant,
   isLoggedIn,
   listRestaurants,
 } from '@/lib/api';
@@ -18,6 +19,7 @@ export default function RestaurantsPage() {
   const [phase, setPhase] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [approvingId, setApprovingId] = useState('');
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -38,6 +40,19 @@ export default function RestaurantsPage() {
       setError(err instanceof Error ? err.message : 'Failed to load');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleApprove = async (restaurantId: string) => {
+    setApprovingId(restaurantId);
+    setError('');
+    try {
+      await approveRestaurant(restaurantId, { reason: 'Approved via BillGenie portal' });
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Approval failed');
+    } finally {
+      setApprovingId('');
     }
   };
 
@@ -89,6 +104,7 @@ export default function RestaurantsPage() {
               <th className="px-4 py-3 font-medium">Approved</th>
               <th className="px-4 py-3 font-medium">Ends</th>
               <th className="px-4 py-3 font-medium">Price</th>
+              <th className="px-4 py-3 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -120,6 +136,16 @@ export default function RestaurantsPage() {
                   <div className="text-xs text-slate-500">{r.days_remaining}d left</div>
                 </td>
                 <td className="px-4 py-3">₹{r.monthly_price}/mo</td>
+                <td className="px-4 py-3">
+                  <button
+                    type="button"
+                    disabled={approvingId === r.id || !r.is_email_verified || r.is_approved}
+                    onClick={() => handleApprove(r.id)}
+                    className="rounded-lg border border-emerald-800 px-3 py-1.5 text-xs text-emerald-300 hover:bg-emerald-950 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {approvingId === r.id ? 'Approving…' : r.is_approved ? 'Approved' : 'Approve'}
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
