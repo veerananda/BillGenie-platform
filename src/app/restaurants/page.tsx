@@ -104,6 +104,8 @@ export default function RestaurantsPage() {
               <th className="px-4 py-3 font-medium">Approved</th>
               <th className="px-4 py-3 font-medium">Ends</th>
               <th className="px-4 py-3 font-medium">Price</th>
+              <th className="px-4 py-3 font-medium">Orders (month)</th>
+              <th className="px-4 py-3 font-medium">Revenue (month)</th>
               <th className="px-4 py-3 font-medium">Actions</th>
             </tr>
           </thead>
@@ -135,7 +137,17 @@ export default function RestaurantsPage() {
                   {formatDate(r.subscription_end)}
                   <div className="text-xs text-slate-500">{r.days_remaining}d left</div>
                 </td>
-                <td className="px-4 py-3">₹{r.monthly_price}/mo</td>
+                <td className="px-4 py-3">
+                  ₹{r.monthly_price_with_gst.toLocaleString('en-IN')}/mo
+                  <div className="text-xs text-slate-500">
+                    ₹{r.monthly_price.toLocaleString('en-IN')} + 18% GST
+                  </div>
+                </td>
+                <td className="px-4 py-3">{r.month_orders.toLocaleString('en-IN')}</td>
+                <td className="px-4 py-3">
+                  ₹{r.month_revenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  <div className="text-xs text-slate-500">incl. GST</div>
+                </td>
                 <td className="px-4 py-3">
                   <button
                     type="button"

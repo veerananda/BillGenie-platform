@@ -28,9 +28,12 @@ export interface PlatformRestaurantSummary {
   is_email_verified: boolean;
   is_approved: boolean;
   monthly_price: number;
+  monthly_price_with_gst: number;
   admin_count: number;
   staff_count: number;
   table_count: number;
+  month_orders: number;
+  month_revenue: number;
   created_at: string;
 }
 

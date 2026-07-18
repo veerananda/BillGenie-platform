@@ -177,7 +177,21 @@ export default function RestaurantDetailPage() {
       <div className="mt-6 grid gap-4 md:grid-cols-3">
         <InfoCard label="Plan" value={detail.subscription_plan} />
         <InfoCard label="Ends" value={formatDate(detail.subscription_end)} />
-        <InfoCard label="Monthly" value={`₹${detail.monthly_price}`} />
+        <InfoCard
+          label="Monthly (incl. 18% GST)"
+          value={`₹${detail.monthly_price_with_gst.toLocaleString('en-IN')}`}
+          sub={`₹${detail.monthly_price.toLocaleString('en-IN')} + GST`}
+        />
+        <InfoCard
+          label="Orders this month"
+          value={detail.month_orders.toLocaleString('en-IN')}
+          sub="Dine-in + counter"
+        />
+        <InfoCard
+          label="Revenue this month"
+          value={`₹${detail.month_revenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+          sub="Incl. GST"
+        />
         <InfoCard label="Tables" value={`${detail.usage.tables ?? 0} / ${detail.limits.max_tables ?? '—'}`} />
         <InfoCard label="Staff" value={String(detail.usage.staff_and_chefs ?? detail.staff_count)} />
         <InfoCard label="Admin login" value={detail.admin_login_hint || '—'} />
@@ -413,11 +427,12 @@ export default function RestaurantDetailPage() {
   );
 }
 
-function InfoCard({ label, value }: { label: string; value: string }) {
+function InfoCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div className="rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3">
       <div className="text-xs uppercase tracking-wide text-slate-500">{label}</div>
       <div className="mt-1 font-medium text-white">{value}</div>
+      {sub ? <div className="text-xs text-slate-500">{sub}</div> : null}
     </div>
   );
 }
