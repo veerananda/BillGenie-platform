@@ -70,7 +70,7 @@ export default function RestaurantDetailPage() {
   const hydrateDealForm = (restaurant: PlatformRestaurantDetail) => {
     const deal = restaurant.custom_deal;
     const sel = deal?.selection || restaurant.selection;
-    setDealMonthly(String(deal?.monthly_price ?? restaurant.monthly_price || 4999));
+    setDealMonthly(String(deal?.monthly_price ?? restaurant.monthly_price ?? 4999));
     setDealAnnual(deal?.annual_price ? String(deal.annual_price) : '');
     setDealTables(String(sel?.max_tables ?? 40));
     setDealExtraStaff(String(sel?.extra_staff ?? 0));
