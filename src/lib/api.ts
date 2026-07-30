@@ -77,9 +77,9 @@ export interface CustomDeal {
 }
 
 export interface PlatformRestaurantDetail extends PlatformRestaurantSummary {
-  selection: SubscriptionSelection;
-  limits: Record<string, unknown>;
-  usage: Record<string, number>;
+  selection?: SubscriptionSelection | null;
+  limits?: Record<string, unknown> | null;
+  usage?: Record<string, number> | null;
   has_ever_paid: boolean;
   start_mode: string;
   pricing_mode?: string;
