@@ -35,6 +35,23 @@ export interface PlatformRestaurantSummary {
   month_orders: number;
   month_revenue: number;
   created_at: string;
+  custom_deal_request_pending?: boolean;
+  requested_max_tables?: number;
+}
+
+export interface CustomDealRequest {
+  max_tables: number;
+  extra_staff: number;
+  extra_chefs: number;
+  extra_managers: number;
+  inventory: boolean;
+  expenses: boolean;
+  history_extended: boolean;
+  billing_cycle: string;
+  notes?: string;
+  contact_phone?: string;
+  status: string;
+  requested_at?: string | null;
 }
 
 export interface SubscriptionSelection {
@@ -84,6 +101,7 @@ export interface PlatformRestaurantDetail extends PlatformRestaurantSummary {
   start_mode: string;
   pricing_mode?: string;
   custom_deal?: CustomDeal | null;
+  custom_deal_request?: CustomDealRequest | null;
   is_self_service: boolean;
   counter_service_modes: string;
   admin_login_hint?: string;
@@ -162,12 +180,14 @@ async function platformFetch<T>(path: string, init?: RequestInit): Promise<T> {
 export async function listRestaurants(params: {
   search?: string;
   phase?: string;
+  custom_deal_pending?: boolean;
   limit?: number;
   offset?: number;
 }) {
   const q = new URLSearchParams();
   if (params.search) q.set('search', params.search);
   if (params.phase) q.set('phase', params.phase);
+  if (params.custom_deal_pending) q.set('custom_deal_pending', 'true');
   if (params.limit) q.set('limit', String(params.limit));
   if (params.offset) q.set('offset', String(params.offset));
   return platformFetch<{

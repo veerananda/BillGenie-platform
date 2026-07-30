@@ -73,20 +73,39 @@ export default function RestaurantDetailPage() {
 
   const hydrateDealForm = (restaurant: PlatformRestaurantDetail) => {
     const deal = restaurant.custom_deal;
-    const sel = emptyDealSelection(deal?.selection || restaurant.selection);
+    const req = restaurant.custom_deal_request;
+    const pendingReq = req && String(req.status || '').toLowerCase() === 'pending' ? req : null;
+    const sel = emptyDealSelection(
+      deal?.selection ||
+        (pendingReq
+          ? {
+              billing_cycle: pendingReq.billing_cycle,
+              max_tables: pendingReq.max_tables,
+              extra_staff: pendingReq.extra_staff,
+              extra_chefs: pendingReq.extra_chefs,
+              extra_managers: pendingReq.extra_managers,
+              inventory: pendingReq.inventory,
+              expenses: pendingReq.expenses,
+              history_extended: pendingReq.history_extended,
+            }
+          : restaurant.selection)
+    );
     const hasDeal = Boolean(deal && Number(deal.monthly_price) > 0);
     setDealMonthly(String(deal?.monthly_price ?? restaurant.monthly_price ?? 4999));
     setDealAnnual(deal?.annual_price ? String(deal.annual_price) : '');
-    setDealTables(String(sel.max_tables || (hasDeal ? 40 : 10)));
+    setDealTables(String(sel.max_tables || (hasDeal || pendingReq ? 40 : 10)));
     setDealExtraStaff(String(sel.extra_staff));
     setDealExtraChefs(String(sel.extra_chefs));
     setDealExtraManagers(String(sel.extra_managers));
-    // Prefer stored flags; only default add-ons on for a brand-new deal draft.
     setDealInventory(Boolean(sel.inventory));
     setDealExpenses(Boolean(sel.expenses));
     setDealHistory(Boolean(sel.history_extended));
     setDealLock(deal?.lock_self_serve_changes ?? true);
-    setDealNotes(deal?.notes || '');
+    setDealNotes(deal?.notes || pendingReq?.notes || '');
+    // When fulfilling an app request, leave activate off so they pay in-app.
+    if (pendingReq && !hasDeal) {
+      setDealActivate(false);
+    }
   };
 
   const load = async () => {
@@ -282,6 +301,27 @@ export default function RestaurantDetailPage() {
           Negotiated monthly price and capacity for large restaurants. Catalog self-serve
           stays unchanged; only platform can set this.
         </p>
+        {detail.custom_deal_request_pending && detail.custom_deal_request ? (
+          <div className="mt-3 rounded-lg border border-amber-700/60 bg-amber-950/40 p-3 text-sm text-amber-100">
+            <p className="font-medium">Pending request from app/web</p>
+            <p className="mt-1 text-amber-200/90">
+              {detail.custom_deal_request.max_tables} tables · +{detail.custom_deal_request.extra_staff} staff · +
+              {detail.custom_deal_request.extra_chefs} chefs · +{detail.custom_deal_request.extra_managers} managers
+              {detail.custom_deal_request.inventory ? ' · inventory' : ''}
+              {detail.custom_deal_request.expenses ? ' · expenses' : ''}
+              {detail.custom_deal_request.history_extended ? ' · extended history' : ''}
+            </p>
+            {detail.custom_deal_request.notes ? (
+              <p className="mt-1 whitespace-pre-wrap text-amber-100/80">{detail.custom_deal_request.notes}</p>
+            ) : null}
+            {detail.custom_deal_request.contact_phone ? (
+              <p className="mt-1 text-xs text-amber-200/70">Phone: {detail.custom_deal_request.contact_phone}</p>
+            ) : null}
+            <p className="mt-2 text-xs text-amber-200/70">
+              Set the monthly price below and apply (leave Activate off so they pay in the app).
+            </p>
+          </div>
+        ) : null}
         {(detail.pricing_mode || 'catalog') === 'custom' && detail.custom_deal ? (
           <p className="mt-2 text-sm text-amber-200">
             Active · {formatInr(detail.custom_deal.monthly_price)}/mo ·{' '}
