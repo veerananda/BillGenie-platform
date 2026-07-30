@@ -21,20 +21,24 @@ import {
 } from '@/lib/api';
 import { BulkImportPanel } from '@/components/BulkImportPanel';
 
-function emptyDealSelection(base?: SubscriptionSelection | null): SubscriptionSelection {
+function emptyDealSelection(base?: Partial<SubscriptionSelection> | null): SubscriptionSelection {
   return {
     billing_cycle: base?.billing_cycle || 'monthly',
-    operation_mode: 'both',
-    max_tables: base?.max_tables ?? 10,
-    extra_staff: base?.extra_staff ?? 0,
-    extra_chefs: base?.extra_chefs ?? 0,
-    extra_managers: base?.extra_managers ?? 0,
+    operation_mode: base?.operation_mode || 'both',
+    max_tables: Number(base?.max_tables) > 0 ? Number(base?.max_tables) : 10,
+    extra_staff: Number(base?.extra_staff) || 0,
+    extra_chefs: Number(base?.extra_chefs) || 0,
+    extra_managers: Number(base?.extra_managers) || 0,
     history_extended: Boolean(base?.history_extended),
     inventory: Boolean(base?.inventory),
     expenses: Boolean(base?.expenses),
-    kitchen_dine_in: true,
-    kitchen_counter: true,
+    kitchen_dine_in: base?.kitchen_dine_in !== false,
+    kitchen_counter: base?.kitchen_counter !== false,
   };
+}
+
+function formatInr(amount: number | null | undefined): string {
+  return `₹${Number(amount || 0).toLocaleString('en-IN')}`;
 }
 
 export default function RestaurantDetailPage() {
@@ -56,9 +60,9 @@ export default function RestaurantDetailPage() {
   const [dealExtraStaff, setDealExtraStaff] = useState('0');
   const [dealExtraChefs, setDealExtraChefs] = useState('0');
   const [dealExtraManagers, setDealExtraManagers] = useState('0');
-  const [dealInventory, setDealInventory] = useState(true);
-  const [dealExpenses, setDealExpenses] = useState(true);
-  const [dealHistory, setDealHistory] = useState(true);
+  const [dealInventory, setDealInventory] = useState(false);
+  const [dealExpenses, setDealExpenses] = useState(false);
+  const [dealHistory, setDealHistory] = useState(false);
   const [dealLock, setDealLock] = useState(true);
   const [dealActivate, setDealActivate] = useState(true);
   const [dealDurationDays, setDealDurationDays] = useState('30');
@@ -69,16 +73,18 @@ export default function RestaurantDetailPage() {
 
   const hydrateDealForm = (restaurant: PlatformRestaurantDetail) => {
     const deal = restaurant.custom_deal;
-    const sel = deal?.selection || restaurant.selection;
+    const sel = emptyDealSelection(deal?.selection || restaurant.selection);
+    const hasDeal = Boolean(deal && Number(deal.monthly_price) > 0);
     setDealMonthly(String(deal?.monthly_price ?? restaurant.monthly_price ?? 4999));
     setDealAnnual(deal?.annual_price ? String(deal.annual_price) : '');
-    setDealTables(String(sel?.max_tables ?? 40));
-    setDealExtraStaff(String(sel?.extra_staff ?? 0));
-    setDealExtraChefs(String(sel?.extra_chefs ?? 0));
-    setDealExtraManagers(String(sel?.extra_managers ?? 0));
-    setDealInventory(Boolean(sel?.inventory ?? true));
-    setDealExpenses(Boolean(sel?.expenses ?? true));
-    setDealHistory(Boolean(sel?.history_extended ?? true));
+    setDealTables(String(sel.max_tables || (hasDeal ? 40 : 10)));
+    setDealExtraStaff(String(sel.extra_staff));
+    setDealExtraChefs(String(sel.extra_chefs));
+    setDealExtraManagers(String(sel.extra_managers));
+    // Prefer stored flags; only default add-ons on for a brand-new deal draft.
+    setDealInventory(Boolean(sel.inventory));
+    setDealExpenses(Boolean(sel.expenses));
+    setDealHistory(Boolean(sel.history_extended));
     setDealLock(deal?.lock_self_serve_changes ?? true);
     setDealNotes(deal?.notes || '');
   };
@@ -88,14 +94,11 @@ export default function RestaurantDetailPage() {
     setError('');
     try {
       const data = await getRestaurant(id);
-      setDetail(data.restaurant);
-      setSelection({
-        ...emptyDealSelection(data.restaurant.selection),
-        ...data.restaurant.selection,
-        extra_chefs: data.restaurant.selection.extra_chefs ?? 0,
-        expenses: Boolean(data.restaurant.selection.expenses),
-      });
-      hydrateDealForm(data.restaurant);
+      const restaurant = data.restaurant;
+      setDetail(restaurant);
+      // Older tenants may omit selection / new fields (extra_chefs, expenses, pricing_mode).
+      setSelection(emptyDealSelection(restaurant.selection));
+      hydrateDealForm(restaurant);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load');
     } finally {
@@ -231,27 +234,37 @@ export default function RestaurantDetailPage() {
       <div className="mt-6 grid gap-4 md:grid-cols-3">
         <InfoCard
           label="Plan"
-          value={detail.subscription_plan}
-          sub={detail.pricing_mode === 'custom' ? 'Custom commercial deal' : 'Catalog pricing'}
+          value={detail.subscription_plan || '—'}
+          sub={
+            (detail.pricing_mode || 'catalog') === 'custom'
+              ? 'Custom commercial deal'
+              : 'Catalog pricing'
+          }
         />
         <InfoCard label="Ends" value={formatDate(detail.subscription_end)} />
         <InfoCard
           label="Monthly (incl. 18% GST)"
-          value={`₹${detail.monthly_price_with_gst.toLocaleString('en-IN')}`}
-          sub={`₹${detail.monthly_price.toLocaleString('en-IN')} + GST`}
+          value={formatInr(detail.monthly_price_with_gst)}
+          sub={`${formatInr(detail.monthly_price)} + GST`}
         />
         <InfoCard
           label="Orders this month"
-          value={detail.month_orders.toLocaleString('en-IN')}
+          value={Number(detail.month_orders || 0).toLocaleString('en-IN')}
           sub="Dine-in + counter"
         />
         <InfoCard
           label="Revenue this month"
-          value={`₹${detail.month_revenue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`}
+          value={formatInr(detail.month_revenue)}
           sub="Incl. GST"
         />
-        <InfoCard label="Tables" value={`${detail.usage.tables ?? 0} / ${detail.limits.max_tables ?? '—'}`} />
-        <InfoCard label="Staff" value={String(detail.usage.staff_and_chefs ?? detail.staff_count)} />
+        <InfoCard
+          label="Tables"
+          value={`${detail.usage?.tables ?? detail.table_count ?? 0} / ${detail.limits?.max_tables ?? '—'}`}
+        />
+        <InfoCard
+          label="Staff"
+          value={String(detail.usage?.staff_and_chefs ?? detail.staff_count ?? 0)}
+        />
         <InfoCard label="Admin login" value={detail.admin_login_hint || '—'} />
         <div className="rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3">
           <div className="text-xs uppercase tracking-wide text-slate-500">Email verified</div>
@@ -269,9 +282,9 @@ export default function RestaurantDetailPage() {
           Negotiated monthly price and capacity for large restaurants. Catalog self-serve
           stays unchanged; only platform can set this.
         </p>
-        {detail.pricing_mode === 'custom' && detail.custom_deal ? (
+        {(detail.pricing_mode || 'catalog') === 'custom' && detail.custom_deal ? (
           <p className="mt-2 text-sm text-amber-200">
-            Active · ₹{detail.custom_deal.monthly_price.toLocaleString('en-IN')}/mo ·{' '}
+            Active · {formatInr(detail.custom_deal.monthly_price)}/mo ·{' '}
             {detail.custom_deal.lock_self_serve_changes
               ? 'self-serve plan changes locked'
               : 'self-serve plan changes allowed'}
@@ -410,7 +423,7 @@ export default function RestaurantDetailPage() {
           label="Apply custom deal"
           busy={busy === 'custom-deal'}
         />
-        {detail.pricing_mode === 'custom' ? (
+        {(detail.pricing_mode || 'catalog') === 'custom' ? (
           <div className="mt-3">
             <button
               type="button"
@@ -434,7 +447,14 @@ export default function RestaurantDetailPage() {
           Catalog-only. Disabled while a custom commercial deal is active — edit or clear the
           deal above instead.
         </p>
-        {detail.pricing_mode === 'custom' ? (
+        {Boolean(detail.limits?.is_legacy) ? (
+          <p className="mt-2 text-sm text-amber-300">
+            Legacy restaurant (pre-subscription config). Limits shown above are grandfathered.
+            Saving catalog add-ons will migrate this restaurant onto the current Starter/Growth/Scale
+            model.
+          </p>
+        ) : null}
+        {(detail.pricing_mode || 'catalog') === 'custom' ? (
           <p className="mt-2 text-sm text-amber-300">
             Custom deal active — catalog selection save is blocked by the API.
           </p>
