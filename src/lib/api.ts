@@ -42,11 +42,38 @@ export interface SubscriptionSelection {
   operation_mode: string;
   max_tables: number;
   extra_staff: number;
+  extra_chefs: number;
   extra_managers: number;
   history_extended: boolean;
   inventory: boolean;
+  expenses: boolean;
   kitchen_dine_in: boolean;
   kitchen_counter: boolean;
+}
+
+export interface CustomLimitsOverride {
+  max_tables?: number;
+  max_staff?: number;
+  max_chefs?: number;
+  max_managers?: number;
+  history_days?: number;
+  inventory?: boolean;
+  expenses?: boolean;
+  kitchen_dine_in?: boolean;
+  kitchen_counter?: boolean;
+  dine_in_enabled?: boolean;
+  counter_enabled?: boolean;
+}
+
+export interface CustomDeal {
+  monthly_price: number;
+  annual_price?: number;
+  selection: SubscriptionSelection;
+  limits_override?: CustomLimitsOverride | null;
+  lock_self_serve_changes: boolean;
+  notes?: string;
+  set_by?: string;
+  set_at?: string | null;
 }
 
 export interface PlatformRestaurantDetail extends PlatformRestaurantSummary {
@@ -55,6 +82,8 @@ export interface PlatformRestaurantDetail extends PlatformRestaurantSummary {
   usage: Record<string, number>;
   has_ever_paid: boolean;
   start_mode: string;
+  pricing_mode?: string;
+  custom_deal?: CustomDeal | null;
   is_self_service: boolean;
   counter_service_modes: string;
   admin_login_hint?: string;
@@ -220,6 +249,28 @@ export async function updateSelection(
   return platformFetch<{ message: string }>(
     `/platform/restaurants/${id}/selection`,
     { method: 'PUT', body: JSON.stringify(body) }
+  );
+}
+
+export async function setCustomDeal(
+  id: string,
+  body: {
+    reason: string;
+    deal: CustomDeal;
+    activate?: boolean;
+    duration_days?: number;
+  }
+) {
+  return platformFetch<{ message: string }>(
+    `/platform/restaurants/${id}/custom-deal`,
+    { method: 'PUT', body: JSON.stringify(body) }
+  );
+}
+
+export async function clearCustomDeal(id: string, body: { reason: string }) {
+  return platformFetch<{ message: string }>(
+    `/platform/restaurants/${id}/custom-deal`,
+    { method: 'DELETE', body: JSON.stringify(body) }
   );
 }
 
