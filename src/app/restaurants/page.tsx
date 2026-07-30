@@ -17,6 +17,7 @@ export default function RestaurantsPage() {
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [phase, setPhase] = useState('');
+  const [customPendingOnly, setCustomPendingOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [approvingId, setApprovingId] = useState('');
@@ -33,7 +34,12 @@ export default function RestaurantsPage() {
     setLoading(true);
     setError('');
     try {
-      const data = await listRestaurants({ search, phase, limit: 100 });
+      const data = await listRestaurants({
+        search,
+        phase,
+        custom_deal_pending: customPendingOnly || undefined,
+        limit: 100,
+      });
       setItems(data.restaurants);
       setTotal(data.total);
     } catch (err) {
@@ -80,6 +86,14 @@ export default function RestaurantsPage() {
             <option value="active">Active</option>
             <option value="pending_payment">Pending payment</option>
           </select>
+          <label className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-200">
+            <input
+              type="checkbox"
+              checked={customPendingOnly}
+              onChange={(e) => setCustomPendingOnly(e.target.checked)}
+            />
+            Custom deal requests
+          </label>
           <button
             type="button"
             onClick={load}
@@ -123,7 +137,14 @@ export default function RestaurantsPage() {
                     {r.email} · {r.city || '—'}
                   </div>
                 </td>
-                <td className="px-4 py-3 capitalize">{r.subscription_plan}</td>
+                <td className="px-4 py-3 capitalize">
+                  {r.subscription_plan}
+                  {r.custom_deal_request_pending ? (
+                    <div className="mt-1 text-xs font-medium text-amber-300">
+                      Custom request · {r.requested_max_tables || '?'} tables
+                    </div>
+                  ) : null}
+                </td>
                 <td className="px-4 py-3">
                   <PhaseBadge phase={r.subscription_phase} blocked={r.is_access_blocked} />
                 </td>
