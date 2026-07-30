@@ -5,18 +5,37 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { PlatformShell, PhaseBadge, BoolBadge, formatDate } from '@/components/PlatformShell';
 import {
+  CustomDeal,
   PlatformRestaurantDetail,
   SubscriptionSelection,
   approveRestaurant,
+  clearCustomDeal,
   deleteRestaurant,
   extendTrial,
   getRestaurant,
   grantSubscription,
   isLoggedIn,
+  setCustomDeal,
   setRestaurantActive,
   updateSelection,
 } from '@/lib/api';
 import { BulkImportPanel } from '@/components/BulkImportPanel';
+
+function emptyDealSelection(base?: SubscriptionSelection | null): SubscriptionSelection {
+  return {
+    billing_cycle: base?.billing_cycle || 'monthly',
+    operation_mode: 'both',
+    max_tables: base?.max_tables ?? 10,
+    extra_staff: base?.extra_staff ?? 0,
+    extra_chefs: base?.extra_chefs ?? 0,
+    extra_managers: base?.extra_managers ?? 0,
+    history_extended: Boolean(base?.history_extended),
+    inventory: Boolean(base?.inventory),
+    expenses: Boolean(base?.expenses),
+    kitchen_dine_in: true,
+    kitchen_counter: true,
+  };
+}
 
 export default function RestaurantDetailPage() {
   const params = useParams();
@@ -31,9 +50,38 @@ export default function RestaurantDetailPage() {
   const [durationDays, setDurationDays] = useState('30');
   const [trialDays, setTrialDays] = useState('15');
   const [selection, setSelection] = useState<SubscriptionSelection | null>(null);
+  const [dealMonthly, setDealMonthly] = useState('4999');
+  const [dealAnnual, setDealAnnual] = useState('');
+  const [dealTables, setDealTables] = useState('40');
+  const [dealExtraStaff, setDealExtraStaff] = useState('0');
+  const [dealExtraChefs, setDealExtraChefs] = useState('0');
+  const [dealExtraManagers, setDealExtraManagers] = useState('0');
+  const [dealInventory, setDealInventory] = useState(true);
+  const [dealExpenses, setDealExpenses] = useState(true);
+  const [dealHistory, setDealHistory] = useState(true);
+  const [dealLock, setDealLock] = useState(true);
+  const [dealActivate, setDealActivate] = useState(true);
+  const [dealDurationDays, setDealDurationDays] = useState('30');
+  const [dealNotes, setDealNotes] = useState('');
   const [busy, setBusy] = useState('');
   const [confirmName, setConfirmName] = useState('');
   const [deleteReason, setDeleteReason] = useState('');
+
+  const hydrateDealForm = (restaurant: PlatformRestaurantDetail) => {
+    const deal = restaurant.custom_deal;
+    const sel = deal?.selection || restaurant.selection;
+    setDealMonthly(String(deal?.monthly_price ?? restaurant.monthly_price ?? 4999));
+    setDealAnnual(deal?.annual_price ? String(deal.annual_price) : '');
+    setDealTables(String(sel?.max_tables ?? 40));
+    setDealExtraStaff(String(sel?.extra_staff ?? 0));
+    setDealExtraChefs(String(sel?.extra_chefs ?? 0));
+    setDealExtraManagers(String(sel?.extra_managers ?? 0));
+    setDealInventory(Boolean(sel?.inventory ?? true));
+    setDealExpenses(Boolean(sel?.expenses ?? true));
+    setDealHistory(Boolean(sel?.history_extended ?? true));
+    setDealLock(deal?.lock_self_serve_changes ?? true);
+    setDealNotes(deal?.notes || '');
+  };
 
   const load = async () => {
     setLoading(true);
@@ -41,7 +89,13 @@ export default function RestaurantDetailPage() {
     try {
       const data = await getRestaurant(id);
       setDetail(data.restaurant);
-      setSelection(data.restaurant.selection);
+      setSelection({
+        ...emptyDealSelection(data.restaurant.selection),
+        ...data.restaurant.selection,
+        extra_chefs: data.restaurant.selection.extra_chefs ?? 0,
+        expenses: Boolean(data.restaurant.selection.expenses),
+      });
+      hydrateDealForm(data.restaurant);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load');
     } finally {
@@ -175,7 +229,11 @@ export default function RestaurantDetailPage() {
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-3">
-        <InfoCard label="Plan" value={detail.subscription_plan} />
+        <InfoCard
+          label="Plan"
+          value={detail.subscription_plan}
+          sub={detail.pricing_mode === 'custom' ? 'Custom commercial deal' : 'Catalog pricing'}
+        />
         <InfoCard label="Ends" value={formatDate(detail.subscription_end)} />
         <InfoCard
           label="Monthly (incl. 18% GST)"
@@ -205,9 +263,182 @@ export default function RestaurantDetailPage() {
         </div>
       </div>
 
+      <section className="mt-8 rounded-xl border border-amber-900/50 bg-amber-950/20 p-5">
+        <h2 className="text-lg font-medium text-white">Custom commercial deal</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          Negotiated monthly price and capacity for large restaurants. Catalog self-serve
+          stays unchanged; only platform can set this.
+        </p>
+        {detail.pricing_mode === 'custom' && detail.custom_deal ? (
+          <p className="mt-2 text-sm text-amber-200">
+            Active · ₹{detail.custom_deal.monthly_price.toLocaleString('en-IN')}/mo ·{' '}
+            {detail.custom_deal.lock_self_serve_changes
+              ? 'self-serve plan changes locked'
+              : 'self-serve plan changes allowed'}
+            {detail.custom_deal.set_by ? ` · set by ${detail.custom_deal.set_by}` : ''}
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-slate-500">No custom deal — using catalog rates.</p>
+        )}
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <label className="text-sm text-slate-300">
+            Monthly price (₹)
+            <input
+              type="number"
+              min={1}
+              value={dealMonthly}
+              onChange={(e) => setDealMonthly(e.target.value)}
+              className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+            />
+          </label>
+          <label className="text-sm text-slate-300">
+            Annual price (₹, optional)
+            <input
+              type="number"
+              min={0}
+              value={dealAnnual}
+              onChange={(e) => setDealAnnual(e.target.value)}
+              placeholder="defaults to monthly × 11"
+              className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+            />
+          </label>
+          <label className="text-sm text-slate-300">
+            Max tables
+            <input
+              type="number"
+              min={5}
+              max={200}
+              value={dealTables}
+              onChange={(e) => setDealTables(e.target.value)}
+              className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+            />
+          </label>
+          <label className="text-sm text-slate-300">
+            Extra staff
+            <input
+              type="number"
+              min={0}
+              value={dealExtraStaff}
+              onChange={(e) => setDealExtraStaff(e.target.value)}
+              className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+            />
+          </label>
+          <label className="text-sm text-slate-300">
+            Extra chefs
+            <input
+              type="number"
+              min={0}
+              value={dealExtraChefs}
+              onChange={(e) => setDealExtraChefs(e.target.value)}
+              className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+            />
+          </label>
+          <label className="text-sm text-slate-300">
+            Extra managers
+            <input
+              type="number"
+              min={0}
+              value={dealExtraManagers}
+              onChange={(e) => setDealExtraManagers(e.target.value)}
+              className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+            />
+          </label>
+          <label className="text-sm text-slate-300">
+            Duration days (if activate)
+            <input
+              type="number"
+              min={0}
+              value={dealDurationDays}
+              onChange={(e) => setDealDurationDays(e.target.value)}
+              className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+            />
+          </label>
+          <label className="text-sm text-slate-300 sm:col-span-2">
+            Notes
+            <input
+              value={dealNotes}
+              onChange={(e) => setDealNotes(e.target.value)}
+              placeholder="e.g. Pilot deal for chain HQ"
+              className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+            />
+          </label>
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <AddonToggle label="Inventory" checked={dealInventory} onChange={() => setDealInventory((v) => !v)} />
+          <AddonToggle label="Expenses" checked={dealExpenses} onChange={() => setDealExpenses((v) => !v)} />
+          <AddonToggle label="Extended history (2yr)" checked={dealHistory} onChange={() => setDealHistory((v) => !v)} />
+          <AddonToggle
+            label="Lock self-serve plan changes"
+            checked={dealLock}
+            onChange={() => setDealLock((v) => !v)}
+          />
+          <AddonToggle
+            label="Activate paid phase now"
+            checked={dealActivate}
+            onChange={() => setDealActivate((v) => !v)}
+          />
+        </div>
+        <ActionRow
+          reason={reason}
+          onReason={setReason}
+          onRun={() => {
+            const deal: CustomDeal = {
+              monthly_price: Number(dealMonthly) || 0,
+              annual_price: dealAnnual ? Number(dealAnnual) : 0,
+              selection: {
+                ...emptyDealSelection(selection),
+                max_tables: Number(dealTables) || 10,
+                extra_staff: Number(dealExtraStaff) || 0,
+                extra_chefs: Number(dealExtraChefs) || 0,
+                extra_managers: Number(dealExtraManagers) || 0,
+                inventory: dealInventory,
+                expenses: dealExpenses,
+                history_extended: dealHistory,
+              },
+              lock_self_serve_changes: dealLock,
+              notes: dealNotes.trim(),
+            };
+            return runAction('custom-deal', () =>
+              setCustomDeal(id, {
+                reason: reason.trim(),
+                deal,
+                activate: dealActivate,
+                duration_days: Number(dealDurationDays) || 0,
+              })
+            );
+          }}
+          label="Apply custom deal"
+          busy={busy === 'custom-deal'}
+        />
+        {detail.pricing_mode === 'custom' ? (
+          <div className="mt-3">
+            <button
+              type="button"
+              disabled={!!busy}
+              onClick={() =>
+                runAction('clear-deal', () =>
+                  clearCustomDeal(id, { reason: reason.trim() || 'Clear custom deal' })
+                )
+              }
+              className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+            >
+              {busy === 'clear-deal' ? 'Working…' : 'Clear custom deal → catalog'}
+            </button>
+          </div>
+        ) : null}
+      </section>
+
       <section className="mt-8 rounded-xl border border-slate-800 bg-slate-900/50 p-5">
-        <h2 className="text-lg font-medium text-white">Add-ons & limits</h2>
-        <p className="mt-1 text-sm text-slate-400">Toggle features then save selection.</p>
+        <h2 className="text-lg font-medium text-white">Catalog add-ons & limits</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          Catalog-only. Disabled while a custom commercial deal is active — edit or clear the
+          deal above instead.
+        </p>
+        {detail.pricing_mode === 'custom' ? (
+          <p className="mt-2 text-sm text-amber-300">
+            Custom deal active — catalog selection save is blocked by the API.
+          </p>
+        ) : null}
         {selection ? (
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <AddonToggle
@@ -226,16 +457,22 @@ export default function RestaurantDetailPage() {
               onChange={() => toggleAddon('inventory')}
             />
             <AddonToggle
+              label="Expenses"
+              checked={Boolean(selection.expenses)}
+              onChange={() => toggleAddon('expenses')}
+            />
+            <AddonToggle
               label="Extended history"
               checked={selection.history_extended}
               onChange={() => toggleAddon('history_extended')}
             />
             <label className="text-sm text-slate-300">
-              Max tables
+              Plan band / max tables (10=Starter, 18=Growth, 25=Scale)
               <input
                 type="number"
-                min={0}
-                max={50}
+                min={10}
+                max={25}
+                step={1}
                 value={selection.max_tables}
                 onChange={(e) =>
                   setSelection({ ...selection, max_tables: Number(e.target.value) })
@@ -268,7 +505,7 @@ export default function RestaurantDetailPage() {
               updateSelection(id, { reason: reason.trim(), selection })
             )
           }
-          label="Save add-ons"
+          label="Save catalog add-ons"
           busy={busy === 'selection'}
         />
       </section>
