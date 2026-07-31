@@ -43,6 +43,16 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
                 >
                   Support Issues
                 </Link>
+                <Link
+                  href="/custom-plan-leads"
+                  className={
+                    pathname?.startsWith('/custom-plan-leads')
+                      ? 'text-white'
+                      : 'hover:text-white'
+                  }
+                >
+                  Custom Plan Leads
+                </Link>
               </div>
             </nav>
           </div>

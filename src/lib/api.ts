@@ -237,6 +237,52 @@ export async function updateSupportIssue(
   );
 }
 
+export type CustomPlanLeadStatus = 'pending' | 'contacted' | 'converted' | 'closed';
+
+export interface PlatformCustomPlanLead {
+  id: string;
+  name: string;
+  phone: string;
+  restaurant_name: string;
+  address: string;
+  city?: string;
+  state?: string;
+  notes?: string;
+  source?: string;
+  status: CustomPlanLeadStatus;
+  internal_note?: string;
+  updated_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function listCustomPlanLeads(params: {
+  search?: string;
+  status?: CustomPlanLeadStatus | '';
+  limit?: number;
+  offset?: number;
+}) {
+  const q = new URLSearchParams();
+  if (params.search) q.set('search', params.search);
+  if (params.status) q.set('status', params.status);
+  if (params.limit) q.set('limit', String(params.limit));
+  if (params.offset) q.set('offset', String(params.offset));
+  return platformFetch<{
+    leads: PlatformCustomPlanLead[];
+    total: number;
+  }>(`/platform/custom-plan-leads?${q.toString()}`);
+}
+
+export async function updateCustomPlanLead(
+  id: string,
+  body: { status: CustomPlanLeadStatus; internal_note?: string }
+) {
+  return platformFetch<{ message: string; lead: PlatformCustomPlanLead }>(
+    `/platform/custom-plan-leads/${id}`,
+    { method: 'PUT', body: JSON.stringify(body) }
+  );
+}
+
 export async function grantSubscription(
   id: string,
   body: {
