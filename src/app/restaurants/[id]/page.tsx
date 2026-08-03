@@ -23,7 +23,7 @@ import { BulkImportPanel } from '@/components/BulkImportPanel';
 
 function emptyDealSelection(base?: Partial<SubscriptionSelection> | null): SubscriptionSelection {
   return {
-    billing_cycle: base?.billing_cycle || 'monthly',
+    billing_cycle: base?.billing_cycle || 'quarterly',
     operation_mode: base?.operation_mode || 'both',
     max_tables: Number(base?.max_tables) > 0 ? Number(base?.max_tables) : 10,
     extra_staff: Number(base?.extra_staff) || 0,
@@ -592,7 +592,7 @@ export default function RestaurantDetailPage() {
               runAction('grant', () =>
                 grantSubscription(id, {
                   reason: reason.trim(),
-                  billing_cycle: 'monthly',
+                  billing_cycle: 'quarterly',
                   duration_days: Number(durationDays) || 30,
                   selection: selection || undefined,
                 })
