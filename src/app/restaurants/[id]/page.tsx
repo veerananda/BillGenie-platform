@@ -10,6 +10,7 @@ import {
   SubscriptionSelection,
   approveRestaurant,
   clearCustomDeal,
+  cancelCustomDealRequest,
   deleteRestaurant,
   extendTrial,
   getRestaurant,
@@ -63,7 +64,7 @@ export default function RestaurantDetailPage() {
   const [dealInventory, setDealInventory] = useState(false);
   const [dealExpenses, setDealExpenses] = useState(false);
   const [dealHistory, setDealHistory] = useState(false);
-  const [dealLock, setDealLock] = useState(true);
+  const [dealLock, setDealLock] = useState(false);
   const [dealActivate, setDealActivate] = useState(true);
   const [dealDurationDays, setDealDurationDays] = useState('30');
   const [dealNotes, setDealNotes] = useState('');
@@ -100,7 +101,7 @@ export default function RestaurantDetailPage() {
     setDealInventory(Boolean(sel.inventory));
     setDealExpenses(Boolean(sel.expenses));
     setDealHistory(Boolean(sel.history_extended));
-    setDealLock(deal?.lock_self_serve_changes ?? true);
+    setDealLock(deal?.lock_self_serve_changes ?? false);
     setDealNotes(deal?.notes || pendingReq?.notes || '');
     // When fulfilling an app request, leave activate off so they pay in-app.
     if (pendingReq && !hasDeal) {
@@ -234,6 +235,10 @@ export default function RestaurantDetailPage() {
     }
   };
 
+  const hasPendingRequest = Boolean(detail.custom_deal_request_pending && detail.custom_deal_request);
+  const hasActiveCustomDeal =
+    (detail.pricing_mode || 'catalog') === 'custom' && Boolean(detail.custom_deal);
+
   return (
     <PlatformShell>
       <Link href="/restaurants" className="text-sm text-emerald-400 hover:underline">
@@ -296,141 +301,263 @@ export default function RestaurantDetailPage() {
       </div>
 
       <section className="mt-8 rounded-xl border border-amber-900/50 bg-amber-950/20 p-5">
-        <h2 className="text-lg font-medium text-white">Custom commercial deal</h2>
-        <p className="mt-1 text-sm text-slate-400">
-          Negotiated monthly price and capacity for large restaurants. Catalog self-serve
-          stays unchanged; only platform can set this.
-        </p>
-        {detail.custom_deal_request_pending && detail.custom_deal_request ? (
-          <div className="mt-3 rounded-lg border border-amber-700/60 bg-amber-950/40 p-3 text-sm text-amber-100">
-            <p className="font-medium">Pending request from app/web</p>
-            <p className="mt-1 text-amber-200/90">
-              {detail.custom_deal_request.max_tables} tables · +{detail.custom_deal_request.extra_staff} staff · +
-              {detail.custom_deal_request.extra_chefs} chefs · +{detail.custom_deal_request.extra_managers} managers
-              {detail.custom_deal_request.inventory ? ' · inventory' : ''}
-              {detail.custom_deal_request.expenses ? ' · expenses' : ''}
-              {detail.custom_deal_request.history_extended ? ' · extended history' : ''}
-            </p>
-            {detail.custom_deal_request.notes ? (
-              <p className="mt-1 whitespace-pre-wrap text-amber-100/80">{detail.custom_deal_request.notes}</p>
-            ) : null}
-            {detail.custom_deal_request.contact_phone ? (
-              <p className="mt-1 text-xs text-amber-200/70">Phone: {detail.custom_deal_request.contact_phone}</p>
-            ) : null}
-            <p className="mt-2 text-xs text-amber-200/70">
-              Set the monthly price below and apply (leave Activate off so they pay in the app).
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-medium text-white">Custom deal</h2>
+            <p className="mt-1 text-sm text-slate-400">
+              Negotiated price &amp; capacity. Catalog plans stay available until you apply a deal.
             </p>
           </div>
+          {hasActiveCustomDeal ? (
+            <span className="rounded-full bg-amber-500/20 px-3 py-1 text-xs font-medium text-amber-200">
+              Active deal
+            </span>
+          ) : hasPendingRequest ? (
+            <span className="rounded-full bg-orange-500/20 px-3 py-1 text-xs font-medium text-orange-200">
+              Awaiting quote
+            </span>
+          ) : (
+            <span className="rounded-full bg-slate-700/60 px-3 py-1 text-xs font-medium text-slate-300">
+              Catalog
+            </span>
+          )}
+        </div>
+
+        {hasPendingRequest && detail.custom_deal_request ? (
+          <div className="mt-4 flex flex-col gap-3 rounded-lg border border-orange-700/50 bg-orange-950/30 p-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="text-sm text-orange-100">
+              <p className="font-medium">Customer asked for a custom plan</p>
+              <p className="mt-1 text-orange-200/80">
+                They can still use catalog upgrade/downgrade meanwhile. Paying for a catalog plan
+                closes this request automatically. Or decline below if they should stay on catalog
+                only.
+              </p>
+              {detail.custom_deal_request.contact_phone ? (
+                <p className="mt-2 text-xs text-orange-200/70">
+                  Phone: {detail.custom_deal_request.contact_phone}
+                </p>
+              ) : null}
+              {detail.custom_deal_request.notes ? (
+                <p className="mt-1 whitespace-pre-wrap text-xs text-orange-100/80">
+                  {detail.custom_deal_request.notes}
+                </p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              disabled={!!busy}
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    'Decline this request? The restaurant can keep using catalog Starter / Growth / Scale.'
+                  )
+                ) {
+                  return;
+                }
+                const dismissReason =
+                  reason.trim() ||
+                  'Declined pending custom plan request — continue with catalog';
+                setBusy('dismiss-request');
+                setError('');
+                setMessage('');
+                try {
+                  const res = await cancelCustomDealRequest(id, { reason: dismissReason });
+                  setMessage(res.message || 'Request declined');
+                  setReason('');
+                  await load();
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'Action failed');
+                } finally {
+                  setBusy('');
+                }
+              }}
+              className="shrink-0 rounded-lg border border-orange-600/60 px-3 py-2 text-sm text-orange-100 hover:bg-orange-900/40 disabled:opacity-50"
+            >
+              {busy === 'dismiss-request' ? 'Declining…' : 'Decline → catalog'}
+            </button>
+          </div>
         ) : null}
-        {(detail.pricing_mode || 'catalog') === 'custom' && detail.custom_deal ? (
-          <p className="mt-2 text-sm text-amber-200">
-            Active · {formatInr(detail.custom_deal.monthly_price)}/mo ·{' '}
-            {detail.custom_deal.lock_self_serve_changes
-              ? 'self-serve plan changes locked'
-              : 'self-serve plan changes allowed'}
+
+        {hasActiveCustomDeal && detail.custom_deal ? (
+          <p className="mt-3 text-sm text-amber-200/90">
+            {formatInr(detail.custom_deal.monthly_price)}/mo
             {detail.custom_deal.set_by ? ` · set by ${detail.custom_deal.set_by}` : ''}
+            {detail.custom_deal.lock_self_serve_changes
+              ? ' · plan changes locked in app'
+              : ' · customer can change plan in app'}
           </p>
-        ) : (
-          <p className="mt-2 text-sm text-slate-500">No custom deal — using catalog rates.</p>
-        )}
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <label className="text-sm text-slate-300">
-            Monthly price (₹)
-            <input
-              type="number"
-              min={1}
-              value={dealMonthly}
-              onChange={(e) => setDealMonthly(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
-            />
-          </label>
-          <label className="text-sm text-slate-300">
-            Annual price (₹, optional)
-            <input
-              type="number"
-              min={0}
-              value={dealAnnual}
-              onChange={(e) => setDealAnnual(e.target.value)}
-              placeholder="defaults to monthly × 11"
-              className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
-            />
-          </label>
-          <label className="text-sm text-slate-300">
-            Max tables
-            <input
-              type="number"
-              min={5}
-              max={200}
-              value={dealTables}
-              onChange={(e) => setDealTables(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
-            />
-          </label>
-          <label className="text-sm text-slate-300">
-            Extra staff
-            <input
-              type="number"
-              min={0}
-              value={dealExtraStaff}
-              onChange={(e) => setDealExtraStaff(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
-            />
-          </label>
-          <label className="text-sm text-slate-300">
-            Extra chefs
-            <input
-              type="number"
-              min={0}
-              value={dealExtraChefs}
-              onChange={(e) => setDealExtraChefs(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
-            />
-          </label>
-          <label className="text-sm text-slate-300">
-            Extra managers
-            <input
-              type="number"
-              min={0}
-              value={dealExtraManagers}
-              onChange={(e) => setDealExtraManagers(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
-            />
-          </label>
-          <label className="text-sm text-slate-300">
-            Duration days (if activate)
-            <input
-              type="number"
-              min={0}
-              value={dealDurationDays}
-              onChange={(e) => setDealDurationDays(e.target.value)}
-              className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
-            />
-          </label>
-          <label className="text-sm text-slate-300 sm:col-span-2">
-            Notes
-            <input
-              value={dealNotes}
-              onChange={(e) => setDealNotes(e.target.value)}
-              placeholder="e.g. Pilot deal for chain HQ"
-              className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
-            />
-          </label>
+        ) : null}
+
+        <div className="mt-5 space-y-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Price</p>
+            <div className="mt-2 grid gap-3 sm:grid-cols-2">
+              <label className="text-sm text-slate-300">
+                Monthly (₹) *
+                <input
+                  type="number"
+                  min={1}
+                  value={dealMonthly}
+                  onChange={(e) => setDealMonthly(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+                />
+              </label>
+              <label className="text-sm text-slate-300">
+                Annual (₹, optional)
+                <input
+                  type="number"
+                  min={0}
+                  value={dealAnnual}
+                  onChange={(e) => setDealAnnual(e.target.value)}
+                  placeholder="defaults to monthly × 11"
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+                />
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Capacity</p>
+            <div className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="text-sm text-slate-300">
+                Tables
+                <input
+                  type="number"
+                  min={5}
+                  max={200}
+                  value={dealTables}
+                  onChange={(e) => setDealTables(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+                />
+              </label>
+              <label className="text-sm text-slate-300">
+                Extra staff
+                <input
+                  type="number"
+                  min={0}
+                  value={dealExtraStaff}
+                  onChange={(e) => setDealExtraStaff(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+                />
+              </label>
+              <label className="text-sm text-slate-300">
+                Extra chefs
+                <input
+                  type="number"
+                  min={0}
+                  value={dealExtraChefs}
+                  onChange={(e) => setDealExtraChefs(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+                />
+              </label>
+              <label className="text-sm text-slate-300">
+                Extra managers
+                <input
+                  type="number"
+                  min={0}
+                  value={dealExtraManagers}
+                  onChange={(e) => setDealExtraManagers(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+                />
+              </label>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              <AddonToggle label="Inventory" checked={dealInventory} onChange={() => setDealInventory((v) => !v)} />
+              <AddonToggle label="Expenses" checked={dealExpenses} onChange={() => setDealExpenses((v) => !v)} />
+              <AddonToggle
+                label="Extended history (2yr)"
+                checked={dealHistory}
+                onChange={() => setDealHistory((v) => !v)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">When you save</p>
+            <div className="mt-2 space-y-2">
+              <label
+                className={`flex cursor-pointer gap-3 rounded-lg border p-3 text-sm ${
+                  !dealActivate
+                    ? 'border-amber-600/70 bg-amber-950/40 text-amber-50'
+                    : 'border-slate-700 bg-slate-950/40 text-slate-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="deal-apply-mode"
+                  className="mt-1"
+                  checked={!dealActivate}
+                  onChange={() => setDealActivate(false)}
+                />
+                <span>
+                  <span className="font-medium text-white">Send quote — customer pays in app</span>
+                  <span className="mt-0.5 block text-xs text-slate-400">
+                    Recommended for requests. Emails them when the deal is ready.
+                  </span>
+                </span>
+              </label>
+              <label
+                className={`flex cursor-pointer gap-3 rounded-lg border p-3 text-sm ${
+                  dealActivate
+                    ? 'border-amber-600/70 bg-amber-950/40 text-amber-50'
+                    : 'border-slate-700 bg-slate-950/40 text-slate-300'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="deal-apply-mode"
+                  className="mt-1"
+                  checked={dealActivate}
+                  onChange={() => setDealActivate(true)}
+                />
+                <span>
+                  <span className="font-medium text-white">Activate now — already paid / comp</span>
+                  <span className="mt-0.5 block text-xs text-slate-400">
+                    Turns on paid access immediately. No in-app payment.
+                  </span>
+                </span>
+              </label>
+            </div>
+            {dealActivate ? (
+              <label className="mt-3 block max-w-xs text-sm text-slate-300">
+                Access length (days, optional)
+                <input
+                  type="number"
+                  min={0}
+                  value={dealDurationDays}
+                  onChange={(e) => setDealDurationDays(e.target.value)}
+                  placeholder="Uses billing cycle if empty"
+                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+                />
+              </label>
+            ) : null}
+            <label className="mt-3 flex cursor-pointer items-start gap-2 text-sm text-slate-300">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={dealLock}
+                onChange={() => setDealLock((v) => !v)}
+              />
+                <span>
+                  Lock upgrades in the app
+                  <span className="mt-0.5 block text-xs text-slate-500">
+                    Optional. Blocks mid-cycle upgrades only. Customers can still schedule a catalog
+                    downgrade for the next cycle. Pending requests are never locked.
+                  </span>
+                </span>
+            </label>
+            <label className="mt-3 block text-sm text-slate-300">
+              Internal notes
+              <input
+                value={dealNotes}
+                onChange={(e) => setDealNotes(e.target.value)}
+                placeholder="e.g. Pilot for chain HQ"
+                className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+              />
+            </label>
+          </div>
         </div>
-        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          <AddonToggle label="Inventory" checked={dealInventory} onChange={() => setDealInventory((v) => !v)} />
-          <AddonToggle label="Expenses" checked={dealExpenses} onChange={() => setDealExpenses((v) => !v)} />
-          <AddonToggle label="Extended history (2yr)" checked={dealHistory} onChange={() => setDealHistory((v) => !v)} />
-          <AddonToggle
-            label="Lock self-serve plan changes"
-            checked={dealLock}
-            onChange={() => setDealLock((v) => !v)}
-          />
-          <AddonToggle
-            label="Activate paid phase now"
-            checked={dealActivate}
-            onChange={() => setDealActivate((v) => !v)}
-          />
-        </div>
+
         <ActionRow
           reason={reason}
           onReason={setReason}
@@ -460,22 +587,30 @@ export default function RestaurantDetailPage() {
               })
             );
           }}
-          label="Apply custom deal"
+          label={dealActivate ? 'Activate custom deal' : 'Save quote & notify'}
           busy={busy === 'custom-deal'}
         />
-        {(detail.pricing_mode || 'catalog') === 'custom' ? (
-          <div className="mt-3">
+
+        {hasActiveCustomDeal ? (
+          <div className="mt-4 border-t border-slate-800 pt-4">
             <button
               type="button"
               disabled={!!busy}
-              onClick={() =>
-                runAction('clear-deal', () =>
-                  clearCustomDeal(id, { reason: reason.trim() || 'Clear custom deal' })
-                )
-              }
-              className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    'Remove this custom deal and switch the restaurant back to catalog pricing?'
+                  )
+                ) {
+                  return;
+                }
+                return runAction('clear-deal', () =>
+                  clearCustomDeal(id, { reason: reason.trim() || 'Cleared custom deal → catalog' })
+                );
+              }}
+              className="text-sm text-slate-400 underline-offset-2 hover:text-slate-200 hover:underline disabled:opacity-50"
             >
-              {busy === 'clear-deal' ? 'Working…' : 'Clear custom deal → catalog'}
+              {busy === 'clear-deal' ? 'Removing…' : 'Remove deal → back to catalog'}
             </button>
           </div>
         ) : null}
