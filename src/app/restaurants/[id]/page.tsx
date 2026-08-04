@@ -21,6 +21,14 @@ import {
   updateSelection,
 } from '@/lib/api';
 import { BulkImportPanel } from '@/components/BulkImportPanel';
+import { DealPlanPresetPicker } from '@/components/DealPlanPresetPicker';
+import {
+  applyCatalogPlan,
+  repriceCatalogPlan,
+  type CityTier,
+  type DealPlanSource,
+  type PlanBand,
+} from '@/lib/catalogPlans';
 
 function emptyDealSelection(base?: Partial<SubscriptionSelection> | null): SubscriptionSelection {
   return {
@@ -55,9 +63,9 @@ export default function RestaurantDetailPage() {
   const [durationDays, setDurationDays] = useState('30');
   const [trialDays, setTrialDays] = useState('15');
   const [selection, setSelection] = useState<SubscriptionSelection | null>(null);
-  const [dealMonthly, setDealMonthly] = useState('4999');
+  const [dealMonthly, setDealMonthly] = useState('999');
   const [dealAnnual, setDealAnnual] = useState('');
-  const [dealTables, setDealTables] = useState('40');
+  const [dealTables, setDealTables] = useState('10');
   const [dealExtraStaff, setDealExtraStaff] = useState('0');
   const [dealExtraChefs, setDealExtraChefs] = useState('0');
   const [dealExtraManagers, setDealExtraManagers] = useState('0');
@@ -68,6 +76,8 @@ export default function RestaurantDetailPage() {
   const [dealActivate, setDealActivate] = useState(true);
   const [dealDurationDays, setDealDurationDays] = useState('30');
   const [dealNotes, setDealNotes] = useState('');
+  const [dealPlanSource, setDealPlanSource] = useState<DealPlanSource>('custom');
+  const [dealCityTier, setDealCityTier] = useState<CityTier>('tier_2');
   const [busy, setBusy] = useState('');
   const [confirmName, setConfirmName] = useState('');
   const [deleteReason, setDeleteReason] = useState('');
@@ -92,7 +102,7 @@ export default function RestaurantDetailPage() {
           : restaurant.selection)
     );
     const hasDeal = Boolean(deal && Number(deal.monthly_price) > 0);
-    setDealMonthly(String(deal?.monthly_price ?? restaurant.monthly_price ?? 4999));
+    setDealMonthly(String(deal?.monthly_price ?? restaurant.monthly_price ?? 999));
     setDealAnnual(deal?.annual_price ? String(deal.annual_price) : '');
     setDealTables(String(sel.max_tables || (hasDeal || pendingReq ? 40 : 10)));
     setDealExtraStaff(String(sel.extra_staff));
@@ -103,10 +113,79 @@ export default function RestaurantDetailPage() {
     setDealHistory(Boolean(sel.history_extended));
     setDealLock(deal?.lock_self_serve_changes ?? false);
     setDealNotes(deal?.notes || pendingReq?.notes || '');
+    setDealPlanSource(hasDeal || pendingReq ? 'custom' : 'starter');
+    setDealCityTier('tier_2');
     // When fulfilling an app request, leave activate off so they pay in-app.
     if (pendingReq && !hasDeal) {
       setDealActivate(false);
     }
+  };
+
+  const applyRestaurantPlanSource = (source: DealPlanSource) => {
+    if (source === 'custom') {
+      setDealPlanSource('custom');
+      return;
+    }
+    const catalog = applyCatalogPlan(source, dealCityTier, {
+      inventory: dealInventory,
+      expenses: dealExpenses,
+      history_extended: dealHistory,
+    });
+    setDealPlanSource(source);
+    setDealMonthly(catalog.monthly_price);
+    setDealAnnual(catalog.annual_price);
+    setDealTables(catalog.max_tables);
+    setDealExtraStaff(catalog.extra_staff);
+    setDealExtraChefs(catalog.extra_chefs);
+    setDealExtraManagers(catalog.extra_managers);
+    setDealInventory(catalog.inventory);
+    setDealExpenses(catalog.expenses);
+    setDealHistory(catalog.history_extended);
+    setDealNotes(catalog.deal_notes);
+  };
+
+  const applyRestaurantCityTier = (tier: CityTier) => {
+    setDealCityTier(tier);
+    if (dealPlanSource === 'custom') return;
+    const catalog = applyCatalogPlan(dealPlanSource, tier, {
+      inventory: dealInventory,
+      expenses: dealExpenses,
+      history_extended: dealHistory,
+    });
+    setDealMonthly(catalog.monthly_price);
+    setDealAnnual(catalog.annual_price);
+    setDealTables(catalog.max_tables);
+    setDealExtraStaff(catalog.extra_staff);
+    setDealExtraChefs(catalog.extra_chefs);
+    setDealExtraManagers(catalog.extra_managers);
+    setDealNotes(catalog.deal_notes);
+  };
+
+  const repriceRestaurantCatalog = (patch: {
+    inventory?: boolean;
+    expenses?: boolean;
+    history_extended?: boolean;
+    extra_staff?: string;
+    extra_chefs?: string;
+    extra_managers?: string;
+  }) => {
+    if (dealPlanSource === 'custom') return;
+    const inventory = patch.inventory ?? dealInventory;
+    const expenses = patch.expenses ?? dealExpenses;
+    const history_extended = patch.history_extended ?? dealHistory;
+    const extra_staff = patch.extra_staff ?? dealExtraStaff;
+    const extra_chefs = patch.extra_chefs ?? dealExtraChefs;
+    const extra_managers = patch.extra_managers ?? dealExtraManagers;
+    const priced = repriceCatalogPlan(dealPlanSource as PlanBand, dealCityTier, {
+      inventory,
+      expenses,
+      history_extended,
+      extra_staff,
+      extra_chefs,
+      extra_managers,
+    });
+    setDealMonthly(priced.monthly_price);
+    setDealAnnual(priced.annual_price);
   };
 
   const load = async () => {
@@ -389,6 +468,14 @@ export default function RestaurantDetailPage() {
         ) : null}
 
         <div className="mt-5 space-y-5">
+          <DealPlanPresetPicker
+            source={dealPlanSource}
+            tier={dealCityTier}
+            disabled={!!busy}
+            onSourceChange={applyRestaurantPlanSource}
+            onTierChange={applyRestaurantCityTier}
+          />
+
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Price</p>
             <div className="mt-2 grid gap-3 sm:grid-cols-2">
@@ -398,7 +485,10 @@ export default function RestaurantDetailPage() {
                   type="number"
                   min={1}
                   value={dealMonthly}
-                  onChange={(e) => setDealMonthly(e.target.value)}
+                  onChange={(e) => {
+                    setDealPlanSource('custom');
+                    setDealMonthly(e.target.value);
+                  }}
                   className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
                 />
               </label>
@@ -408,12 +498,21 @@ export default function RestaurantDetailPage() {
                   type="number"
                   min={0}
                   value={dealAnnual}
-                  onChange={(e) => setDealAnnual(e.target.value)}
+                  onChange={(e) => {
+                    setDealPlanSource('custom');
+                    setDealAnnual(e.target.value);
+                  }}
                   placeholder="defaults to monthly × 11"
                   className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
                 />
               </label>
             </div>
+            {dealPlanSource !== 'custom' ? (
+              <p className="mt-2 text-xs text-slate-500">
+                Editing price or tables switches to Custom. Add-ons reprice while a catalog plan is
+                selected.
+              </p>
+            ) : null}
           </div>
 
           <div>
@@ -426,7 +525,10 @@ export default function RestaurantDetailPage() {
                   min={5}
                   max={200}
                   value={dealTables}
-                  onChange={(e) => setDealTables(e.target.value)}
+                  onChange={(e) => {
+                    setDealPlanSource('custom');
+                    setDealTables(e.target.value);
+                  }}
                   className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
                 />
               </label>
@@ -436,7 +538,10 @@ export default function RestaurantDetailPage() {
                   type="number"
                   min={0}
                   value={dealExtraStaff}
-                  onChange={(e) => setDealExtraStaff(e.target.value)}
+                  onChange={(e) => {
+                    setDealExtraStaff(e.target.value);
+                    repriceRestaurantCatalog({ extra_staff: e.target.value });
+                  }}
                   className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
                 />
               </label>
@@ -446,7 +551,10 @@ export default function RestaurantDetailPage() {
                   type="number"
                   min={0}
                   value={dealExtraChefs}
-                  onChange={(e) => setDealExtraChefs(e.target.value)}
+                  onChange={(e) => {
+                    setDealExtraChefs(e.target.value);
+                    repriceRestaurantCatalog({ extra_chefs: e.target.value });
+                  }}
                   className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
                 />
               </label>
@@ -456,18 +564,41 @@ export default function RestaurantDetailPage() {
                   type="number"
                   min={0}
                   value={dealExtraManagers}
-                  onChange={(e) => setDealExtraManagers(e.target.value)}
+                  onChange={(e) => {
+                    setDealExtraManagers(e.target.value);
+                    repriceRestaurantCatalog({ extra_managers: e.target.value });
+                  }}
                   className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
                 />
               </label>
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
-              <AddonToggle label="Inventory" checked={dealInventory} onChange={() => setDealInventory((v) => !v)} />
-              <AddonToggle label="Expenses" checked={dealExpenses} onChange={() => setDealExpenses((v) => !v)} />
+              <AddonToggle
+                label="Inventory"
+                checked={dealInventory}
+                onChange={() => {
+                  const next = !dealInventory;
+                  setDealInventory(next);
+                  repriceRestaurantCatalog({ inventory: next });
+                }}
+              />
+              <AddonToggle
+                label="Expenses"
+                checked={dealExpenses}
+                onChange={() => {
+                  const next = !dealExpenses;
+                  setDealExpenses(next);
+                  repriceRestaurantCatalog({ expenses: next });
+                }}
+              />
               <AddonToggle
                 label="Extended history (2yr)"
                 checked={dealHistory}
-                onChange={() => setDealHistory((v) => !v)}
+                onChange={() => {
+                  const next = !dealHistory;
+                  setDealHistory(next);
+                  repriceRestaurantCatalog({ history_extended: next });
+                }}
               />
             </div>
           </div>

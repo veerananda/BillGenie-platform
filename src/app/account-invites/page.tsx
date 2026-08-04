@@ -3,6 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PlatformShell, formatDate } from '@/components/PlatformShell';
+import { DealPlanPresetPicker } from '@/components/DealPlanPresetPicker';
+import {
+  applyCatalogPlan,
+  repriceCatalogPlan,
+  type CityTier,
+  type DealPlanSource,
+  type PlanBand,
+} from '@/lib/catalogPlans';
 import {
   AccountInviteStatus,
   PlatformAccountInvite,
@@ -27,6 +35,8 @@ function statusClass(status: AccountInviteStatus) {
 }
 
 type DealDraft = {
+  plan_source: DealPlanSource;
+  city_tier: CityTier;
   reason: string;
   monthly_price: string;
   annual_price: string;
@@ -43,25 +53,40 @@ type DealDraft = {
 };
 
 function emptyDeal(invite?: PlatformAccountInvite): DealDraft {
-  const monthly = invite?.monthly_price && invite.monthly_price > 0 ? String(invite.monthly_price) : '4999';
-  const annual =
-    invite?.annual_price && invite.annual_price > 0
-      ? String(invite.annual_price)
-      : String(Number(monthly) * 11);
+  const hasExisting = Boolean(invite?.monthly_price && invite.monthly_price > 0);
+  if (hasExisting) {
+    const monthly = String(invite!.monthly_price);
+    const annual =
+      invite!.annual_price && invite!.annual_price > 0
+        ? String(invite!.annual_price)
+        : String(Number(monthly) * 11);
+    return {
+      plan_source: 'custom',
+      city_tier: 'tier_2',
+      reason: 'Negotiated account invite deal',
+      monthly_price: monthly,
+      annual_price: annual,
+      max_tables: String(invite!.max_tables || 10),
+      extra_staff: String(invite!.extra_staff || 0),
+      extra_chefs: String(invite!.extra_chefs || 0),
+      extra_managers: String(invite!.extra_managers || 0),
+      inventory: Boolean(invite!.inventory),
+      expenses: Boolean(invite!.expenses),
+      history_extended: Boolean(invite!.history_extended),
+      lock_self_serve_changes: Boolean(invite!.lock_self_serve_changes),
+      deal_notes: invite!.deal_notes || '',
+      internal_note: invite!.internal_note || '',
+    };
+  }
+
+  const catalog = applyCatalogPlan('starter', 'tier_2');
   return {
-    reason: 'Negotiated account invite deal',
-    monthly_price: monthly,
-    annual_price: annual,
-    max_tables: String(invite?.max_tables || 10),
-    extra_staff: String(invite?.extra_staff || 0),
-    extra_chefs: String(invite?.extra_chefs || 0),
-    extra_managers: String(invite?.extra_managers || 0),
-    inventory: Boolean(invite?.inventory),
-    expenses: Boolean(invite?.expenses),
-    history_extended: Boolean(invite?.history_extended),
-    lock_self_serve_changes: Boolean(invite?.lock_self_serve_changes),
-    deal_notes: invite?.deal_notes || '',
-    internal_note: invite?.internal_note || '',
+    plan_source: 'starter',
+    city_tier: 'tier_2',
+    reason: 'Catalog starter account invite deal',
+    ...catalog,
+    lock_self_serve_changes: false,
+    internal_note: '',
   };
 }
 
@@ -118,6 +143,58 @@ export default function AccountInvitesPage() {
       ...prev,
       [id]: { ...(prev[id] || emptyDeal()), ...patch },
     }));
+  };
+
+  const applyPlanSource = (invite: PlatformAccountInvite, source: DealPlanSource) => {
+    const current = drafts[invite.id] || emptyDeal(invite);
+    if (source === 'custom') {
+      updateDraft(invite.id, {
+        plan_source: 'custom',
+        reason: current.reason || 'Custom negotiated account invite deal',
+      });
+      return;
+    }
+    const catalog = applyCatalogPlan(source, current.city_tier, {
+      inventory: current.inventory,
+      expenses: current.expenses,
+      history_extended: current.history_extended,
+    });
+    updateDraft(invite.id, {
+      plan_source: source,
+      ...catalog,
+      reason: `Catalog ${source} account invite deal`,
+    });
+  };
+
+  const applyCityTier = (invite: PlatformAccountInvite, tier: CityTier) => {
+    const current = drafts[invite.id] || emptyDeal(invite);
+    if (current.plan_source === 'custom') {
+      updateDraft(invite.id, { city_tier: tier });
+      return;
+    }
+    const catalog = applyCatalogPlan(current.plan_source, tier, {
+      inventory: current.inventory,
+      expenses: current.expenses,
+      history_extended: current.history_extended,
+    });
+    updateDraft(invite.id, {
+      city_tier: tier,
+      ...catalog,
+    });
+  };
+
+  const updateCatalogAwareField = (
+    invite: PlatformAccountInvite,
+    patch: Partial<DealDraft>
+  ) => {
+    const current = drafts[invite.id] || emptyDeal(invite);
+    const next = { ...current, ...patch };
+    if (next.plan_source !== 'custom') {
+      const priced = repriceCatalogPlan(next.plan_source as PlanBand, next.city_tier, next);
+      next.monthly_price = priced.monthly_price;
+      next.annual_price = priced.annual_price;
+    }
+    updateDraft(invite.id, next);
   };
 
   const saveDeal = async (invite: PlatformAccountInvite) => {
@@ -306,106 +383,149 @@ export default function AccountInvitesPage() {
               ) : null}
 
               {open && canPrice ? (
-                <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <label className="text-xs text-slate-400 sm:col-span-2 lg:col-span-3">
-                    Reason
-                    <input
-                      value={draft.reason}
-                      onChange={(e) => updateDraft(invite.id, { reason: e.target.value })}
-                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
-                    />
-                  </label>
-                  <label className="text-xs text-slate-400">
-                    Monthly ₹
-                    <input
-                      value={draft.monthly_price}
-                      onChange={(e) => updateDraft(invite.id, { monthly_price: e.target.value })}
-                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
-                    />
-                  </label>
-                  <label className="text-xs text-slate-400">
-                    Annual ₹
-                    <input
-                      value={draft.annual_price}
-                      onChange={(e) => updateDraft(invite.id, { annual_price: e.target.value })}
-                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
-                    />
-                  </label>
-                  <label className="text-xs text-slate-400">
-                    Max tables
-                    <input
-                      value={draft.max_tables}
-                      onChange={(e) => updateDraft(invite.id, { max_tables: e.target.value })}
-                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
-                    />
-                  </label>
-                  <label className="text-xs text-slate-400">
-                    Extra staff
-                    <input
-                      value={draft.extra_staff}
-                      onChange={(e) => updateDraft(invite.id, { extra_staff: e.target.value })}
-                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
-                    />
-                  </label>
-                  <label className="text-xs text-slate-400">
-                    Extra chefs
-                    <input
-                      value={draft.extra_chefs}
-                      onChange={(e) => updateDraft(invite.id, { extra_chefs: e.target.value })}
-                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
-                    />
-                  </label>
-                  <label className="text-xs text-slate-400">
-                    Extra managers
-                    <input
-                      value={draft.extra_managers}
-                      onChange={(e) => updateDraft(invite.id, { extra_managers: e.target.value })}
-                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
-                    />
-                  </label>
-                  <div className="flex flex-wrap gap-3 text-sm text-slate-300 sm:col-span-2 lg:col-span-3">
-                    {(
-                      [
-                        ['inventory', 'Inventory'],
-                        ['expenses', 'Expenses'],
-                        ['history_extended', 'Extended history'],
-                        ['lock_self_serve_changes', 'Lock self-serve changes'],
-                      ] as const
-                    ).map(([key, label]) => (
-                      <label key={key} className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={draft[key]}
-                          onChange={(e) => updateDraft(invite.id, { [key]: e.target.checked })}
-                        />
-                        {label}
-                      </label>
-                    ))}
-                  </div>
-                  <label className="text-xs text-slate-400 sm:col-span-2 lg:col-span-3">
-                    Deal notes (customer-facing)
-                    <input
-                      value={draft.deal_notes}
-                      onChange={(e) => updateDraft(invite.id, { deal_notes: e.target.value })}
-                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
-                    />
-                  </label>
-                  <label className="text-xs text-slate-400 sm:col-span-2 lg:col-span-3">
-                    Internal note
-                    <input
-                      value={draft.internal_note}
-                      onChange={(e) => updateDraft(invite.id, { internal_note: e.target.value })}
-                      className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
-                    />
-                  </label>
-                  <button
-                    type="button"
+                <div className="mt-4 space-y-4">
+                  <DealPlanPresetPicker
+                    source={draft.plan_source}
+                    tier={draft.city_tier}
                     disabled={busyId === invite.id}
-                    onClick={() => void saveDeal(invite)}
-                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 sm:col-span-2 lg:col-span-3"
-                  >
-                    {busyId === invite.id ? 'Saving…' : 'Save deal & issue register token'}
-                  </button>
+                    onSourceChange={(source) => applyPlanSource(invite, source)}
+                    onTierChange={(tier) => applyCityTier(invite, tier)}
+                  />
+
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <label className="text-xs text-slate-400 sm:col-span-2 lg:col-span-3">
+                      Reason
+                      <input
+                        value={draft.reason}
+                        onChange={(e) => updateDraft(invite.id, { reason: e.target.value })}
+                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="text-xs text-slate-400">
+                      Monthly ₹{draft.plan_source !== 'custom' ? ' (from catalog + add-ons)' : ''}
+                      <input
+                        value={draft.monthly_price}
+                        onChange={(e) =>
+                          updateDraft(invite.id, {
+                            plan_source: 'custom',
+                            monthly_price: e.target.value,
+                          })
+                        }
+                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="text-xs text-slate-400">
+                      Annual ₹
+                      <input
+                        value={draft.annual_price}
+                        onChange={(e) =>
+                          updateDraft(invite.id, {
+                            plan_source: 'custom',
+                            annual_price: e.target.value,
+                          })
+                        }
+                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="text-xs text-slate-400">
+                      Max tables
+                      <input
+                        value={draft.max_tables}
+                        onChange={(e) =>
+                          updateDraft(invite.id, {
+                            plan_source: 'custom',
+                            max_tables: e.target.value,
+                          })
+                        }
+                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="text-xs text-slate-400">
+                      Extra staff
+                      <input
+                        value={draft.extra_staff}
+                        onChange={(e) =>
+                          updateCatalogAwareField(invite, { extra_staff: e.target.value })
+                        }
+                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="text-xs text-slate-400">
+                      Extra chefs
+                      <input
+                        value={draft.extra_chefs}
+                        onChange={(e) =>
+                          updateCatalogAwareField(invite, { extra_chefs: e.target.value })
+                        }
+                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="text-xs text-slate-400">
+                      Extra managers
+                      <input
+                        value={draft.extra_managers}
+                        onChange={(e) =>
+                          updateCatalogAwareField(invite, { extra_managers: e.target.value })
+                        }
+                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <div className="flex flex-wrap gap-3 text-sm text-slate-300 sm:col-span-2 lg:col-span-3">
+                      {(
+                        [
+                          ['inventory', 'Inventory'],
+                          ['expenses', 'Expenses'],
+                          ['history_extended', 'Extended history'],
+                          ['lock_self_serve_changes', 'Lock self-serve changes'],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <label key={key} className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={draft[key]}
+                            onChange={(e) => {
+                              if (key === 'lock_self_serve_changes') {
+                                updateDraft(invite.id, { [key]: e.target.checked });
+                                return;
+                              }
+                              updateCatalogAwareField(invite, { [key]: e.target.checked });
+                            }}
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                    {draft.plan_source !== 'custom' ? (
+                      <p className="text-xs text-slate-500 sm:col-span-2 lg:col-span-3">
+                        Editing price or tables switches this deal to Custom. Add-ons and extras
+                        reprice automatically while a catalog plan is selected.
+                      </p>
+                    ) : null}
+                    <label className="text-xs text-slate-400 sm:col-span-2 lg:col-span-3">
+                      Deal notes (customer-facing)
+                      <input
+                        value={draft.deal_notes}
+                        onChange={(e) => updateDraft(invite.id, { deal_notes: e.target.value })}
+                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <label className="text-xs text-slate-400 sm:col-span-2 lg:col-span-3">
+                      Internal note
+                      <input
+                        value={draft.internal_note}
+                        onChange={(e) => updateDraft(invite.id, { internal_note: e.target.value })}
+                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      disabled={busyId === invite.id}
+                      onClick={() => void saveDeal(invite)}
+                      className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 sm:col-span-2 lg:col-span-3"
+                    >
+                      {busyId === invite.id ? 'Saving…' : 'Save deal & issue register token'}
+                    </button>
+                  </div>
                 </div>
               ) : null}
             </article>
