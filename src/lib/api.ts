@@ -283,6 +283,86 @@ export async function updateCustomPlanLead(
   );
 }
 
+export type AccountInviteStatus = 'requested' | 'priced' | 'registered' | 'closed';
+
+export interface PlatformAccountInvite {
+  id: string;
+  login_id: string;
+  name: string;
+  phone: string;
+  restaurant_name: string;
+  address: string;
+  city?: string;
+  state?: string;
+  notes?: string;
+  source?: string;
+  status: AccountInviteStatus;
+  internal_note?: string;
+  monthly_price: number;
+  annual_price: number;
+  max_tables: number;
+  extra_staff: number;
+  extra_chefs: number;
+  extra_managers: number;
+  inventory: boolean;
+  expenses: boolean;
+  history_extended: boolean;
+  lock_self_serve_changes: boolean;
+  deal_notes?: string;
+  has_register_token: boolean;
+  register_token_expires_at?: string;
+  restaurant_id?: string;
+  updated_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function listAccountInvites(params: {
+  search?: string;
+  status?: AccountInviteStatus | '';
+  limit?: number;
+  offset?: number;
+}) {
+  const q = new URLSearchParams();
+  if (params.search) q.set('search', params.search);
+  if (params.status) q.set('status', params.status);
+  if (params.limit) q.set('limit', String(params.limit));
+  if (params.offset) q.set('offset', String(params.offset));
+  return platformFetch<{
+    invites: PlatformAccountInvite[];
+    total: number;
+  }>(`/platform/account-invites?${q.toString()}`);
+}
+
+export async function setAccountInviteDeal(
+  id: string,
+  body: {
+    reason: string;
+    monthly_price: number;
+    annual_price?: number;
+    max_tables?: number;
+    extra_staff?: number;
+    extra_chefs?: number;
+    extra_managers?: number;
+    inventory?: boolean;
+    expenses?: boolean;
+    history_extended?: boolean;
+    lock_self_serve_changes?: boolean;
+    deal_notes?: string;
+    internal_note?: string;
+  }
+) {
+  return platformFetch<{
+    message: string;
+    invite: PlatformAccountInvite;
+    register_token: string;
+    login_id: string;
+  }>(`/platform/account-invites/${id}/set-deal`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
 export async function grantSubscription(
   id: string,
   body: {

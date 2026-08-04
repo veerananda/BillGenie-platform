@@ -44,6 +44,16 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
                   Support Issues
                 </Link>
                 <Link
+                  href="/account-invites"
+                  className={
+                    pathname?.startsWith('/account-invites')
+                      ? 'text-white'
+                      : 'hover:text-white'
+                  }
+                >
+                  Account Invites
+                </Link>
+                <Link
                   href="/custom-plan-leads"
                   className={
                     pathname?.startsWith('/custom-plan-leads')
@@ -51,7 +61,7 @@ export function PlatformShell({ children }: { children: React.ReactNode }) {
                       : 'hover:text-white'
                   }
                 >
-                  Custom Plan Leads
+                  Legacy Leads
                 </Link>
               </div>
             </nav>
