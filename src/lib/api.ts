@@ -340,6 +340,13 @@ export async function clearCustomDeal(id: string, body: { reason: string }) {
   );
 }
 
+export async function cancelCustomDealRequest(id: string, body: { reason: string }) {
+  return platformFetch<{ message: string }>(
+    `/platform/restaurants/${id}/cancel-custom-deal-request`,
+    { method: 'POST', body: JSON.stringify(body) }
+  );
+}
+
 export async function setRestaurantActive(
   id: string,
   body: { reason: string; is_active: boolean }
