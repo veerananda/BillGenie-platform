@@ -6,10 +6,8 @@ import { PlatformShell, formatDate } from '@/components/PlatformShell';
 import { DealPlanPresetPicker } from '@/components/DealPlanPresetPicker';
 import {
   applyCatalogPlan,
-  repriceCatalogPlan,
   type CityTier,
   type DealPlanSource,
-  type PlanBand,
 } from '@/lib/catalogPlans';
 import {
   AccountInviteStatus,
@@ -183,20 +181,6 @@ export default function AccountInvitesPage() {
     });
   };
 
-  const updateCatalogAwareField = (
-    invite: PlatformAccountInvite,
-    patch: Partial<DealDraft>
-  ) => {
-    const current = drafts[invite.id] || emptyDeal(invite);
-    const next = { ...current, ...patch };
-    if (next.plan_source !== 'custom') {
-      const priced = repriceCatalogPlan(next.plan_source as PlanBand, next.city_tier, next);
-      next.monthly_price = priced.monthly_price;
-      next.annual_price = priced.annual_price;
-    }
-    updateDraft(invite.id, next);
-  };
-
   const saveDeal = async (invite: PlatformAccountInvite) => {
     const draft = drafts[invite.id] || emptyDeal(invite);
     const monthly = Number(draft.monthly_price);
@@ -230,7 +214,7 @@ export default function AccountInvitesPage() {
       });
       setIssuedTokens((prev) => ({ ...prev, [invite.id]: result.register_token }));
       setMessage(
-        `Deal saved for login ${result.login_id}. Copy the register token below — it is shown once.`
+        `Deal saved for login ${result.login_id}. Copy the 6-digit register code below — it is shown once.`
       );
       setExpandedId(invite.id);
       await load({ status: '' });
@@ -305,6 +289,10 @@ export default function AccountInvitesPage() {
           const open = expandedId === invite.id;
           const token = issuedTokens[invite.id];
           const canPrice = invite.status === 'requested' || invite.status === 'priced';
+          const catalogViewOnly = draft.plan_source !== 'custom';
+          const catalogFieldClass = catalogViewOnly
+            ? 'mt-1 w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-sm text-slate-300'
+            : 'mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white';
           return (
             <article
               key={invite.id}
@@ -356,15 +344,15 @@ export default function AccountInvitesPage() {
 
               {token ? (
                 <div className="mt-3 rounded-lg border border-emerald-800 bg-emerald-950/40 p-3">
-                  <p className="text-xs text-emerald-300">Register token (copy now — shown once)</p>
+                  <p className="text-xs text-emerald-300">Register code (copy now — shown once)</p>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <code className="break-all text-sm text-emerald-100">{token}</code>
+                    <code className="text-lg font-semibold tracking-widest text-emerald-100">{token}</code>
                     <button
                       type="button"
-                      onClick={() => void copyText('Register token', token)}
+                      onClick={() => void copyText('Register code', token)}
                       className="rounded border border-emerald-700 px-2 py-1 text-xs text-emerald-200"
                     >
-                      Copy token
+                      Copy code
                     </button>
                   </div>
                 </div>
@@ -402,72 +390,87 @@ export default function AccountInvitesPage() {
                       />
                     </label>
                     <label className="text-xs text-slate-400">
-                      Monthly ₹{draft.plan_source !== 'custom' ? ' (from catalog + add-ons)' : ''}
+                      Monthly ₹{catalogViewOnly ? ' (catalog list)' : ''}
                       <input
                         value={draft.monthly_price}
+                        readOnly={catalogViewOnly}
                         onChange={(e) =>
                           updateDraft(invite.id, {
                             plan_source: 'custom',
                             monthly_price: e.target.value,
                           })
                         }
-                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                        className={catalogFieldClass}
                       />
                     </label>
                     <label className="text-xs text-slate-400">
                       Annual ₹
                       <input
                         value={draft.annual_price}
+                        readOnly={catalogViewOnly}
                         onChange={(e) =>
                           updateDraft(invite.id, {
                             plan_source: 'custom',
                             annual_price: e.target.value,
                           })
                         }
-                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                        className={catalogFieldClass}
                       />
                     </label>
                     <label className="text-xs text-slate-400">
                       Max tables
                       <input
                         value={draft.max_tables}
+                        readOnly={catalogViewOnly}
                         onChange={(e) =>
                           updateDraft(invite.id, {
                             plan_source: 'custom',
                             max_tables: e.target.value,
                           })
                         }
-                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                        className={catalogFieldClass}
                       />
                     </label>
                     <label className="text-xs text-slate-400">
                       Extra staff
                       <input
                         value={draft.extra_staff}
+                        readOnly={catalogViewOnly}
                         onChange={(e) =>
-                          updateCatalogAwareField(invite, { extra_staff: e.target.value })
+                          updateDraft(invite.id, {
+                            plan_source: 'custom',
+                            extra_staff: e.target.value,
+                          })
                         }
-                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                        className={catalogFieldClass}
                       />
                     </label>
                     <label className="text-xs text-slate-400">
                       Extra chefs
                       <input
                         value={draft.extra_chefs}
+                        readOnly={catalogViewOnly}
                         onChange={(e) =>
-                          updateCatalogAwareField(invite, { extra_chefs: e.target.value })
+                          updateDraft(invite.id, {
+                            plan_source: 'custom',
+                            extra_chefs: e.target.value,
+                          })
                         }
-                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                        className={catalogFieldClass}
                       />
                     </label>
                     <label className="text-xs text-slate-400">
                       Extra managers
                       <input
                         value={draft.extra_managers}
+                        readOnly={catalogViewOnly}
                         onChange={(e) =>
-                          updateCatalogAwareField(invite, { extra_managers: e.target.value })
+                          updateDraft(invite.id, {
+                            plan_source: 'custom',
+                            extra_managers: e.target.value,
+                          })
                         }
-                        className="mt-1 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+                        className={catalogFieldClass}
                       />
                     </label>
                     <div className="flex flex-wrap gap-3 text-sm text-slate-300 sm:col-span-2 lg:col-span-3">
@@ -478,27 +481,38 @@ export default function AccountInvitesPage() {
                           ['history_extended', 'Extended history'],
                           ['lock_self_serve_changes', 'Lock self-serve changes'],
                         ] as const
-                      ).map(([key, label]) => (
-                        <label key={key} className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={draft[key]}
-                            onChange={(e) => {
-                              if (key === 'lock_self_serve_changes') {
-                                updateDraft(invite.id, { [key]: e.target.checked });
-                                return;
-                              }
-                              updateCatalogAwareField(invite, { [key]: e.target.checked });
-                            }}
-                          />
-                          {label}
-                        </label>
-                      ))}
+                      ).map(([key, label]) => {
+                        const addonLocked =
+                          catalogViewOnly && key !== 'lock_self_serve_changes';
+                        return (
+                          <label
+                            key={key}
+                            className={`flex items-center gap-2 ${addonLocked ? 'opacity-60' : ''}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={draft[key]}
+                              disabled={addonLocked}
+                              onChange={(e) => {
+                                if (key === 'lock_self_serve_changes') {
+                                  updateDraft(invite.id, { [key]: e.target.checked });
+                                  return;
+                                }
+                                updateDraft(invite.id, {
+                                  plan_source: 'custom',
+                                  [key]: e.target.checked,
+                                });
+                              }}
+                            />
+                            {label}
+                          </label>
+                        );
+                      })}
                     </div>
-                    {draft.plan_source !== 'custom' ? (
-                      <p className="text-xs text-slate-500 sm:col-span-2 lg:col-span-3">
-                        Editing price or tables switches this deal to Custom. Add-ons and extras
-                        reprice automatically while a catalog plan is selected.
+                    {catalogViewOnly ? (
+                      <p className="text-xs text-amber-200/80 sm:col-span-2 lg:col-span-3">
+                        Catalog plan is view-only. Select Custom to negotiate price, capacity,
+                        extras, or add-ons.
                       </p>
                     ) : null}
                     <label className="text-xs text-slate-400 sm:col-span-2 lg:col-span-3">
