@@ -24,10 +24,8 @@ import { BulkImportPanel } from '@/components/BulkImportPanel';
 import { DealPlanPresetPicker } from '@/components/DealPlanPresetPicker';
 import {
   applyCatalogPlan,
-  repriceCatalogPlan,
   type CityTier,
   type DealPlanSource,
-  type PlanBand,
 } from '@/lib/catalogPlans';
 
 function emptyDealSelection(base?: Partial<SubscriptionSelection> | null): SubscriptionSelection {
@@ -161,33 +159,6 @@ export default function RestaurantDetailPage() {
     setDealNotes(catalog.deal_notes);
   };
 
-  const repriceRestaurantCatalog = (patch: {
-    inventory?: boolean;
-    expenses?: boolean;
-    history_extended?: boolean;
-    extra_staff?: string;
-    extra_chefs?: string;
-    extra_managers?: string;
-  }) => {
-    if (dealPlanSource === 'custom') return;
-    const inventory = patch.inventory ?? dealInventory;
-    const expenses = patch.expenses ?? dealExpenses;
-    const history_extended = patch.history_extended ?? dealHistory;
-    const extra_staff = patch.extra_staff ?? dealExtraStaff;
-    const extra_chefs = patch.extra_chefs ?? dealExtraChefs;
-    const extra_managers = patch.extra_managers ?? dealExtraManagers;
-    const priced = repriceCatalogPlan(dealPlanSource as PlanBand, dealCityTier, {
-      inventory,
-      expenses,
-      history_extended,
-      extra_staff,
-      extra_chefs,
-      extra_managers,
-    });
-    setDealMonthly(priced.monthly_price);
-    setDealAnnual(priced.annual_price);
-  };
-
   const load = async () => {
     setLoading(true);
     setError('');
@@ -317,6 +288,10 @@ export default function RestaurantDetailPage() {
   const hasPendingRequest = Boolean(detail.custom_deal_request_pending && detail.custom_deal_request);
   const hasActiveCustomDeal =
     (detail.pricing_mode || 'catalog') === 'custom' && Boolean(detail.custom_deal);
+  const catalogViewOnly = dealPlanSource !== 'custom';
+  const catalogFieldClass = catalogViewOnly
+    ? 'mt-1 w-full rounded border border-slate-800 bg-slate-900/60 px-2 py-1.5 text-slate-300'
+    : 'mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5';
 
   return (
     <PlatformShell>
@@ -485,11 +460,12 @@ export default function RestaurantDetailPage() {
                   type="number"
                   min={1}
                   value={dealMonthly}
+                  readOnly={catalogViewOnly}
                   onChange={(e) => {
                     setDealPlanSource('custom');
                     setDealMonthly(e.target.value);
                   }}
-                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+                  className={catalogFieldClass}
                 />
               </label>
               <label className="text-sm text-slate-300">
@@ -498,19 +474,20 @@ export default function RestaurantDetailPage() {
                   type="number"
                   min={0}
                   value={dealAnnual}
+                  readOnly={catalogViewOnly}
                   onChange={(e) => {
                     setDealPlanSource('custom');
                     setDealAnnual(e.target.value);
                   }}
                   placeholder="defaults to monthly × 11"
-                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+                  className={catalogFieldClass}
                 />
               </label>
             </div>
-            {dealPlanSource !== 'custom' ? (
-              <p className="mt-2 text-xs text-slate-500">
-                Editing price or tables switches to Custom. Add-ons reprice while a catalog plan is
-                selected.
+            {catalogViewOnly ? (
+              <p className="mt-2 text-xs text-amber-200/80">
+                Catalog plan is view-only. Select Custom to change price, capacity, extras, or
+                add-ons.
               </p>
             ) : null}
           </div>
@@ -525,11 +502,12 @@ export default function RestaurantDetailPage() {
                   min={5}
                   max={200}
                   value={dealTables}
+                  readOnly={catalogViewOnly}
                   onChange={(e) => {
                     setDealPlanSource('custom');
                     setDealTables(e.target.value);
                   }}
-                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+                  className={catalogFieldClass}
                 />
               </label>
               <label className="text-sm text-slate-300">
@@ -538,11 +516,12 @@ export default function RestaurantDetailPage() {
                   type="number"
                   min={0}
                   value={dealExtraStaff}
+                  readOnly={catalogViewOnly}
                   onChange={(e) => {
+                    setDealPlanSource('custom');
                     setDealExtraStaff(e.target.value);
-                    repriceRestaurantCatalog({ extra_staff: e.target.value });
                   }}
-                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+                  className={catalogFieldClass}
                 />
               </label>
               <label className="text-sm text-slate-300">
@@ -551,11 +530,12 @@ export default function RestaurantDetailPage() {
                   type="number"
                   min={0}
                   value={dealExtraChefs}
+                  readOnly={catalogViewOnly}
                   onChange={(e) => {
+                    setDealPlanSource('custom');
                     setDealExtraChefs(e.target.value);
-                    repriceRestaurantCatalog({ extra_chefs: e.target.value });
                   }}
-                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+                  className={catalogFieldClass}
                 />
               </label>
               <label className="text-sm text-slate-300">
@@ -564,11 +544,12 @@ export default function RestaurantDetailPage() {
                   type="number"
                   min={0}
                   value={dealExtraManagers}
+                  readOnly={catalogViewOnly}
                   onChange={(e) => {
+                    setDealPlanSource('custom');
                     setDealExtraManagers(e.target.value);
-                    repriceRestaurantCatalog({ extra_managers: e.target.value });
                   }}
-                  className="mt-1 w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5"
+                  className={catalogFieldClass}
                 />
               </label>
             </div>
@@ -576,28 +557,28 @@ export default function RestaurantDetailPage() {
               <AddonToggle
                 label="Inventory"
                 checked={dealInventory}
+                disabled={catalogViewOnly}
                 onChange={() => {
-                  const next = !dealInventory;
-                  setDealInventory(next);
-                  repriceRestaurantCatalog({ inventory: next });
+                  setDealPlanSource('custom');
+                  setDealInventory(!dealInventory);
                 }}
               />
               <AddonToggle
                 label="Expenses"
                 checked={dealExpenses}
+                disabled={catalogViewOnly}
                 onChange={() => {
-                  const next = !dealExpenses;
-                  setDealExpenses(next);
-                  repriceRestaurantCatalog({ expenses: next });
+                  setDealPlanSource('custom');
+                  setDealExpenses(!dealExpenses);
                 }}
               />
               <AddonToggle
                 label="Extended history (2yr)"
                 checked={dealHistory}
+                disabled={catalogViewOnly}
                 onChange={() => {
-                  const next = !dealHistory;
-                  setDealHistory(next);
-                  repriceRestaurantCatalog({ history_extended: next });
+                  setDealPlanSource('custom');
+                  setDealHistory(!dealHistory);
                 }}
               />
             </div>
@@ -1019,15 +1000,27 @@ function AddonToggle({
   label,
   checked,
   onChange,
+  disabled,
 }: {
   label: string;
   checked: boolean;
   onChange: () => void;
+  disabled?: boolean;
 }) {
   return (
-    <label className="flex cursor-pointer items-center justify-between rounded-lg border border-slate-800 px-3 py-2">
+    <label
+      className={`flex items-center justify-between rounded-lg border border-slate-800 px-3 py-2 ${
+        disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+      }`}
+    >
       <span className="text-sm text-slate-200">{label}</span>
-      <input type="checkbox" checked={checked} onChange={onChange} className="h-4 w-4" />
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={onChange}
+        className="h-4 w-4"
+      />
     </label>
   );
 }

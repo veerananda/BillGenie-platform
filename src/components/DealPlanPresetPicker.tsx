@@ -32,8 +32,8 @@ export function DealPlanPresetPicker({
           Start from
         </p>
         <p className="mt-1 text-xs text-slate-400">
-          Pick Starter / Growth / Scale to prefill catalog capacity and list price, or Custom for a
-          fully negotiated deal.
+          Starter / Growth / Scale are view-only catalog presets. Switch to Custom to change price,
+          capacity, extras, or add-ons.
         </p>
         <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {PLAN_PRESETS.map((preset) => {
