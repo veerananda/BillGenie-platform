@@ -1,4 +1,4 @@
-const BACKEND_API_BASE_URL =
+﻿const BACKEND_API_BASE_URL =
   process.env.PLATFORM_API_BASE_URL ||
   process.env.NEXT_PUBLIC_API_BASE_URL ||
   'https://billgenie-api.fly.dev';
@@ -451,16 +451,6 @@ export async function resendVerificationEmail(id: string, body?: { reason?: stri
   );
 }
 
-export async function getSMTPStatus() {
-  return platformFetch<Record<string, string>>('/platform/smtp/status');
-}
-
-export async function testSMTP(body?: { to?: string }) {
-  return platformFetch<{ message: string; config?: Record<string, string>; error?: string }>(
-    '/platform/smtp/test',
-    { method: 'POST', body: JSON.stringify(body || {}) }
-  );
-}
 
 export async function deleteRestaurant(
   id: string,
