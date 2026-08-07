@@ -451,6 +451,17 @@ export async function resendVerificationEmail(id: string, body?: { reason?: stri
   );
 }
 
+export async function getSMTPStatus() {
+  return platformFetch<Record<string, string>>('/platform/smtp/status');
+}
+
+export async function testSMTP(body?: { to?: string }) {
+  return platformFetch<{ message: string; config?: Record<string, string>; error?: string }>(
+    '/platform/smtp/test',
+    { method: 'POST', body: JSON.stringify(body || {}) }
+  );
+}
+
 export async function deleteRestaurant(
   id: string,
   body: { reason: string; confirm_name: string }

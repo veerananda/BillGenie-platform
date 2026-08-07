@@ -7,8 +7,10 @@ import { PlatformShell, PhaseBadge, BoolBadge, formatDate } from '@/components/P
 import {
   PlatformRestaurantSummary,
   approveRestaurant,
+  getSMTPStatus,
   isLoggedIn,
   listRestaurants,
+  testSMTP,
 } from '@/lib/api';
 
 export default function RestaurantsPage() {
@@ -20,7 +22,11 @@ export default function RestaurantsPage() {
   const [customPendingOnly, setCustomPendingOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [approvingId, setApprovingId] = useState('');
+  const [smtpBusy, setSmtpBusy] = useState(false);
+  const [smtpTo, setSmtpTo] = useState('');
+  const [smtpConfig, setSmtpConfig] = useState<Record<string, string> | null>(null);
 
   useEffect(() => {
     if (!isLoggedIn()) {
@@ -28,6 +34,9 @@ export default function RestaurantsPage() {
       return;
     }
     load();
+    getSMTPStatus()
+      .then(setSmtpConfig)
+      .catch(() => setSmtpConfig(null));
   }, [router]);
 
   const load = async () => {
@@ -46,6 +55,21 @@ export default function RestaurantsPage() {
       setError(err instanceof Error ? err.message : 'Failed to load');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSMTPTest = async (sendMail: boolean) => {
+    setSmtpBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const res = await testSMTP(sendMail && smtpTo.trim() ? { to: smtpTo.trim() } : {});
+      setMessage(res.message);
+      if (res.config) setSmtpConfig(res.config);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'SMTP test failed');
+    } finally {
+      setSmtpBusy(false);
     }
   };
 
@@ -104,7 +128,47 @@ export default function RestaurantsPage() {
         </div>
       </div>
 
+      <div className="mb-4 rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-white">SMTP diagnostics</h2>
+            <p className="mt-1 text-xs text-slate-400">
+              {smtpConfig
+                ? smtpConfig.configured === 'true'
+                  ? `${smtpConfig.host}:${smtpConfig.port} as ${smtpConfig.user}`
+                  : `Not configured — ${smtpConfig.error || 'missing env'}`
+                : 'Loading SMTP status…'}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <input
+              value={smtpTo}
+              onChange={(e) => setSmtpTo(e.target.value)}
+              placeholder="Optional test inbox"
+              className="rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"
+            />
+            <button
+              type="button"
+              disabled={smtpBusy}
+              onClick={() => handleSMTPTest(false)}
+              className="rounded-lg border border-sky-800 px-3 py-2 text-sm text-sky-300 hover:bg-sky-950 disabled:opacity-40"
+            >
+              {smtpBusy ? 'Testing…' : 'Test auth'}
+            </button>
+            <button
+              type="button"
+              disabled={smtpBusy || !smtpTo.trim()}
+              onClick={() => handleSMTPTest(true)}
+              className="rounded-lg border border-amber-800 px-3 py-2 text-sm text-amber-300 hover:bg-amber-950 disabled:opacity-40"
+            >
+              Send test mail
+            </button>
+          </div>
+        </div>
+      </div>
+
       {error ? <p className="mb-4 text-red-400">{error}</p> : null}
+      {message ? <p className="mb-4 text-emerald-400">{message}</p> : null}
       {loading ? <p className="text-slate-400">Loading…</p> : null}
 
       <div className="overflow-hidden rounded-xl border border-slate-800">
