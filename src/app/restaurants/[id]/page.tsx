@@ -16,6 +16,7 @@ import {
   getRestaurant,
   grantSubscription,
   isLoggedIn,
+  resendVerificationEmail,
   setCustomDeal,
   setRestaurantActive,
   updateSelection,
@@ -881,6 +882,36 @@ export default function RestaurantDetailPage() {
           <div className="mt-2 flex flex-wrap gap-2">
             <button
               type="button"
+              disabled={!!busy || !detail.email}
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    `Send verification email to ${detail.email}? Use this if the original mail was missed or expired.`
+                  )
+                ) {
+                  return;
+                }
+                setBusy('resend-verification');
+                setError('');
+                setMessage('');
+                try {
+                  const res = await resendVerificationEmail(id, {
+                    reason: reason.trim() || 'Ops resent verification email',
+                  });
+                  setMessage(res.message || 'Verification email sent');
+                  await load();
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'Failed to send verification email');
+                } finally {
+                  setBusy('');
+                }
+              }}
+              className="rounded-lg border border-sky-800 px-4 py-2 text-sm text-sky-300 hover:bg-sky-950 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {busy === 'resend-verification' ? 'Sending…' : 'Send verification email'}
+            </button>
+            <button
+              type="button"
               disabled={!!busy || !detail.is_email_verified || detail.is_approved}
               onClick={handleApprove}
               className="rounded-lg border border-emerald-800 px-4 py-2 text-sm text-emerald-300 hover:bg-emerald-950 disabled:cursor-not-allowed disabled:opacity-40"
@@ -912,12 +943,20 @@ export default function RestaurantDetailPage() {
               Reactivate
             </button>
           </div>
-          {!detail.is_email_verified ? (
+          {detail.email ? (
             <p className="mt-2 text-xs text-slate-500">
+              Verification mail goes to <span className="text-slate-300">{detail.email}</span>
+              {detail.is_email_verified ? ' (already verified — link can still be resent).' : '.'}
+            </p>
+          ) : (
+            <p className="mt-2 text-xs text-slate-500">No registered email on this restaurant.</p>
+          )}
+          {!detail.is_email_verified ? (
+            <p className="mt-1 text-xs text-slate-500">
               Email must be verified before you can approve this restaurant.
             </p>
           ) : detail.is_approved ? (
-            <p className="mt-2 text-xs text-slate-500">Already approved.</p>
+            <p className="mt-1 text-xs text-slate-500">Already approved.</p>
           ) : null}
           <ActionRow
             reason={reason}
