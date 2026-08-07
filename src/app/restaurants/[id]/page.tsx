@@ -16,6 +16,8 @@ import {
   getRestaurant,
   grantSubscription,
   isLoggedIn,
+  issuePasswordResetLink,
+  markEmailVerified,
   resendVerificationEmail,
   setCustomDeal,
   setRestaurantActive,
@@ -80,6 +82,12 @@ export default function RestaurantDetailPage() {
   const [busy, setBusy] = useState('');
   const [confirmName, setConfirmName] = useState('');
   const [deleteReason, setDeleteReason] = useState('');
+  const [resetLinkInfo, setResetLinkInfo] = useState<{
+    reset_link: string;
+    email: string;
+    login_id: string;
+    expires_at: string;
+  } | null>(null);
 
   const hydrateDealForm = (restaurant: PlatformRestaurantDetail) => {
     const deal = restaurant.custom_deal;
@@ -912,6 +920,76 @@ export default function RestaurantDetailPage() {
             </button>
             <button
               type="button"
+              disabled={!!busy || !detail.email || detail.is_email_verified}
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    `Mark ${detail.email} as verified without sending mail?\n\nOnly do this after you have manually confirmed this email belongs to the restaurant.`
+                  )
+                ) {
+                  return;
+                }
+                setBusy('mark-email-verified');
+                setError('');
+                setMessage('');
+                try {
+                  const res = await markEmailVerified(id, {
+                    reason:
+                      reason.trim() ||
+                      'Ops manually verified email (outbound SMTP unavailable)',
+                  });
+                  setMessage(res.message || 'Email marked as verified');
+                  await load();
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'Failed to mark email verified');
+                } finally {
+                  setBusy('');
+                }
+              }}
+              className="rounded-lg border border-amber-800 px-4 py-2 text-sm text-amber-300 hover:bg-amber-950 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {busy === 'mark-email-verified' ? 'Updating…' : 'Mark email verified'}
+            </button>
+            <button
+              type="button"
+              disabled={!!busy}
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    'Create a password reset link for this restaurant’s admin?\n\nCopy the link and email it from hello@thebillgenie.com. The link expires in 1 hour.'
+                  )
+                ) {
+                  return;
+                }
+                setBusy('password-reset-link');
+                setError('');
+                setMessage('');
+                setResetLinkInfo(null);
+                try {
+                  const res = await issuePasswordResetLink(id, {
+                    reason:
+                      reason.trim() ||
+                      'Ops issued password reset link for manual email delivery',
+                  });
+                  setResetLinkInfo({
+                    reset_link: res.reset_link,
+                    email: res.email,
+                    login_id: res.login_id,
+                    expires_at: res.expires_at,
+                  });
+                  setMessage(res.message || 'Password reset link ready to copy');
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'Failed to create reset link');
+                } finally {
+                  setBusy('');
+                }
+              }}
+              className="rounded-lg border border-violet-800 px-4 py-2 text-sm text-violet-300 hover:bg-violet-950 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {busy === 'password-reset-link' ? 'Creating…' : 'Create password reset link'}
+            </button>
+            <button
+              type="button"
               disabled={!!busy || !detail.is_email_verified || detail.is_approved}
               onClick={handleApprove}
               className="rounded-lg border border-emerald-800 px-4 py-2 text-sm text-emerald-300 hover:bg-emerald-950 disabled:cursor-not-allowed disabled:opacity-40"
@@ -953,10 +1031,49 @@ export default function RestaurantDetailPage() {
           )}
           {!detail.is_email_verified ? (
             <p className="mt-1 text-xs text-slate-500">
-              Email must be verified before you can approve this restaurant.
+              Email must be verified before you can approve. Use Mark email verified after
+              manually confirming the address if mail delivery is down.
             </p>
           ) : detail.is_approved ? (
             <p className="mt-1 text-xs text-slate-500">Already approved.</p>
+          ) : null}
+          {resetLinkInfo ? (
+            <div className="mt-4 rounded-lg border border-violet-900/60 bg-violet-950/30 p-3 text-sm">
+              <p className="font-medium text-violet-200">Password reset link (manual email)</p>
+              <p className="mt-1 text-xs text-slate-400">
+                Send from <span className="text-slate-300">hello@thebillgenie.com</span> to{' '}
+                <span className="text-slate-300">{resetLinkInfo.email}</span>
+                {resetLinkInfo.login_id ? (
+                  <>
+                    {' '}
+                    (login <span className="text-slate-300">{resetLinkInfo.login_id}</span>)
+                  </>
+                ) : null}
+                . Expires {formatDate(resetLinkInfo.expires_at)}.
+              </p>
+              <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start">
+                <code className="block flex-1 break-all rounded bg-slate-950 px-2 py-2 text-xs text-emerald-300">
+                  {resetLinkInfo.reset_link}
+                </code>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(resetLinkInfo.reset_link);
+                      setMessage('Reset link copied to clipboard');
+                    } catch {
+                      setError('Could not copy — select the link and copy manually');
+                    }
+                  }}
+                  className="rounded-lg border border-violet-700 px-3 py-2 text-xs text-violet-200 hover:bg-violet-950"
+                >
+                  Copy link
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-slate-500">
+                Suggested subject: Reset your BillGenie password
+              </p>
+            </div>
           ) : null}
           <ActionRow
             reason={reason}
