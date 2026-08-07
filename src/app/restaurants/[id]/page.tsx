@@ -16,6 +16,7 @@ import {
   getRestaurant,
   grantSubscription,
   isLoggedIn,
+  markEmailVerified,
   resendVerificationEmail,
   setCustomDeal,
   setRestaurantActive,
@@ -912,6 +913,38 @@ export default function RestaurantDetailPage() {
             </button>
             <button
               type="button"
+              disabled={!!busy || !detail.email || detail.is_email_verified}
+              onClick={async () => {
+                if (
+                  !window.confirm(
+                    `Mark ${detail.email} as verified without sending mail?\n\nOnly do this after you have manually confirmed this email belongs to the restaurant.`
+                  )
+                ) {
+                  return;
+                }
+                setBusy('mark-email-verified');
+                setError('');
+                setMessage('');
+                try {
+                  const res = await markEmailVerified(id, {
+                    reason:
+                      reason.trim() ||
+                      'Ops manually verified email (outbound SMTP unavailable)',
+                  });
+                  setMessage(res.message || 'Email marked as verified');
+                  await load();
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : 'Failed to mark email verified');
+                } finally {
+                  setBusy('');
+                }
+              }}
+              className="rounded-lg border border-amber-800 px-4 py-2 text-sm text-amber-300 hover:bg-amber-950 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {busy === 'mark-email-verified' ? 'Updating…' : 'Mark email verified'}
+            </button>
+            <button
+              type="button"
               disabled={!!busy || !detail.is_email_verified || detail.is_approved}
               onClick={handleApprove}
               className="rounded-lg border border-emerald-800 px-4 py-2 text-sm text-emerald-300 hover:bg-emerald-950 disabled:cursor-not-allowed disabled:opacity-40"
@@ -953,7 +986,8 @@ export default function RestaurantDetailPage() {
           )}
           {!detail.is_email_verified ? (
             <p className="mt-1 text-xs text-slate-500">
-              Email must be verified before you can approve this restaurant.
+              Email must be verified before you can approve. Use Mark email verified after
+              manually confirming the address if mail delivery is down.
             </p>
           ) : detail.is_approved ? (
             <p className="mt-1 text-xs text-slate-500">Already approved.</p>
