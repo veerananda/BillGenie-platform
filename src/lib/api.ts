@@ -481,6 +481,15 @@ export async function deleteRestaurant(
   });
 }
 
+export interface BulkMenuVariantRow {
+  label: string;
+  price: number;
+  recipe_scale: number;
+  is_default: boolean;
+  is_available?: boolean;
+  channel_prices?: Record<string, number>;
+}
+
 export interface BulkMenuUploadRow {
   category: string;
   type: string;
@@ -488,6 +497,10 @@ export interface BulkMenuUploadRow {
   is_veg: boolean;
   is_available: boolean;
   is_readily_available: boolean;
+  is_taxable?: boolean;
+  available_channels?: string[];
+  channel_prices?: Record<string, number>;
+  variants?: BulkMenuVariantRow[];
 }
 
 export interface BulkRecipeUploadRow {
