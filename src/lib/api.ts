@@ -451,6 +451,19 @@ export async function markEmailVerified(id: string, body?: { reason?: string }) 
   );
 }
 
+export async function issuePasswordResetLink(id: string, body?: { reason?: string }) {
+  return platformFetch<{
+    message: string;
+    reset_link: string;
+    email: string;
+    login_id: string;
+    expires_at: string;
+  }>(`/platform/restaurants/${id}/password-reset-link`, {
+    method: 'POST',
+    body: JSON.stringify(body || {}),
+  });
+}
+
 export async function resendVerificationEmail(id: string, body?: { reason?: string }) {
   return platformFetch<{ message: string }>(
     `/platform/restaurants/${id}/resend-verification`,
